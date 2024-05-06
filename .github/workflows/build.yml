@@ -93,7 +93,7 @@ jobs:
       with:
         python-version: '3.8'
         architecture: 'x64'
-    - uses: actions/download-artifact@v2
+    - uses: actions/download-artifact@v4
       with:
         name: my_server_extension-sdist
     - name: Install and Test
