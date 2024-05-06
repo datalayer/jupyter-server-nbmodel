@@ -18,45 +18,46 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: [ '3.8', '3.9', '3.10', "3.11" ]
+        python-version: ["3.8", "3.12"]
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Base Setup
-      uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
+      - name: Base Setup
+        uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
 
-    - name: Install dependencies
-      run: python -m pip install -U jupyter_server
+      - name: Install dependencies
+        run: python -m pip install -U jupyter_server
 
-    - name: Build the extension
-      run: |
-        python -m pip install .
-        jupyter server extension list 2>&1 | grep -ie "jupyter_server_nbmodel.*OK"
+      - name: Build the extension
+        run: |
+          python -m pip install .
+          jupyter server extension list 2>&1 | grep -ie "jupyter_server_nbmodel.*OK"
 
-        pip install build
-        python -m build --sdist
-        cp dist/*.tar.gz my_server_extension.tar.gz
-        pip uninstall -y "jupyter_server_nbmodel" jupyter_server
-        rm -rf "jupyter_server_nbmodel"
+          pip install build
+          python -m build --sdist
+          cp dist/*.tar.gz my_server_extension.tar.gz
+          pip uninstall -y "jupyter_server_nbmodel" jupyter_server
+          rm -rf "jupyter_server_nbmodel"
 
-    - uses: actions/upload-artifact@v2
-      with:
-        name: my_server_extension-sdist
-        path: my_server_extension.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        with:
+          name: my_server_extension-sdist
+          path: my_server_extension.tar.gz
 
   check_links:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
       - uses: jupyterlab/maintainer-tools/.github/actions/check-links@v1
 
   test_lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
       - name: Run Linters
         run: |
@@ -65,7 +66,7 @@ jobs:
   check_release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Base Setup
         uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
       - name: Install Dependencies
@@ -76,7 +77,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload Distributions
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: jupyter_server_nbmodel-releaser-dist-${{ github.run_number }}
           path: .jupyter_releaser_checkout/dist
@@ -86,18 +87,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-    - name: Install Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.8'
-        architecture: 'x64'
-    - uses: actions/download-artifact@v2
-      with:
-        name: my_server_extension-sdist
-    - name: Install and Test
-      run: |
-        pip install my_server_extension.tar.gz
-        pip install jupyter_server
-        jupyter server extension list 2>&1 | grep -ie "jupyter_server_nbmodel.*OK"
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+          architecture: "x64"
+      - uses: actions/download-artifact@v4
+        with:
+          name: my_server_extension-sdist
+      - name: Install and Test
+        run: |
+          pip install my_server_extension.tar.gz
+          pip install jupyter_server
+          jupyter server extension list 2>&1 | grep -ie "jupyter_server_nbmodel.*OK"
