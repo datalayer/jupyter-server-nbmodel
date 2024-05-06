@@ -41,7 +41,7 @@ jobs:
         pip uninstall -y "jupyter_server_nbmodel" jupyter_server
         rm -rf "jupyter_server_nbmodel"
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v4
       with:
         name: my_server_extension-sdist
         path: my_server_extension.tar.gz
@@ -76,7 +76,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload Distributions
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: jupyter_server_nbmodel-releaser-dist-${{ github.run_number }}
           path: .jupyter_releaser_checkout/dist
