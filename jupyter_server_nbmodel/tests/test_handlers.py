@@ -36,6 +36,11 @@ def pending_kernel_is_ready(jp_serverapp):
             '{"output_type": "stream", "name": "stdout", "text": "hello buddy\\n"}',
         ),
         ("a = 1", ""),
+        (
+            """from IPython.display import HTML
+HTML('<p><b>Jupyter</b> rocks.</p>')""",
+            '{"output_type": "execute_result", "metadata": {}, "data": {"text/plain": "<IPython.core.display.HTML object>", "text/html": "<p><b>Jupyter</b> rocks.</p>"}, "execution_count": 1}',
+        ),
     ),
 )
 async def test_post_execute(jp_fetch, pending_kernel_is_ready, snippet, output):
