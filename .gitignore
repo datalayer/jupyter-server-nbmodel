@@ -100,3 +100,4 @@ dmypy.json
 
 # OSX files
 .DS_Store
+.jupyter_ystore.db
