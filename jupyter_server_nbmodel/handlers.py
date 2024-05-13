@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import traceback
 import typing as t
@@ -156,15 +157,39 @@ def _output_hook(ycell, outputs, msg) -> None:
     if msg_type in ("display_data", "stream", "execute_result", "error"):
         # FIXME support for version
         output = nbformat.v4.output_from_msg(msg)
-        get_logger().info("Got an output. %s", output)
         outputs.append(output)
 
         if ycell is not None:
-            # FIXME support for 'stream'
-            outputs = ycell["outputs"]
-            with outputs.doc.transaction():
-                outputs.append(output)
+            cell_outputs = ycell["outputs"]
+            if msg_type == "stream":
+                with cell_outputs.doc.transaction():
+                    text = output["text"]
 
+                    # FIXME Logic is quite complex at https://github.com/jupyterlab/jupyterlab/blob/7ae2d436fc410b0cff51042a3350ba71f54f4445/packages/outputarea/src/model.ts#L518
+                    if text.endswith((os.linesep, "\n")):
+                        text = text[:-1]
+
+                    if (not cell_outputs) or (cell_outputs[-1]["name"] != output["name"]):
+                        output["text"] = [text]
+                        cell_outputs.append(output)
+                    else:
+                        last_output = cell_outputs[-1]
+                        last_output["text"].append(text)
+                        cell_outputs[-1] = last_output
+            else:
+                with cell_outputs.doc.transaction():
+                    cell_outputs.append(output)
+
+    elif msg_type == "clear_output":
+        # FIXME msg.content.wait - if true should clear at the next message
+        outputs.clear()
+
+        if ycell is not None:
+            del ycell["outputs"][:]
+
+    elif msg_type == "update_display_data":
+        # FIXME
+        ...
 
 def _stdin_hook(msg) -> None:
     get_logger().info("Code snippet execution is waiting for an input.")
