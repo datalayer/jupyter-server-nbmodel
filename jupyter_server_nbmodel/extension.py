@@ -3,7 +3,7 @@ from __future__ import annotations
 from jupyter_server.extension.application import ExtensionApp
 from jupyter_server.services.kernels.handlers import _kernel_id_regex
 
-from .handlers import ExecuteHandler, ExecutionStack, RequestHandler
+from .handlers import ExecuteHandler, ExecutionStack, InputHandler, RequestHandler
 from .log import get_logger
 
 RTC_EXTENSIONAPP_NAME = "jupyter_server_ydoc"
@@ -35,6 +35,10 @@ class Extension(ExtensionApp):
                     f"/api/kernels/{_kernel_id_regex}/execute",
                     ExecuteHandler,
                     {"ydoc_extension": rtc_extension, "execution_stack": self.__tasks},
+                ),
+                (
+                    f"/api/kernels/{_kernel_id_regex}/input",
+                    InputHandler,
                 ),
                 (
                     f"/api/kernels/{_kernel_id_regex}/requests/{_request_id_regex}",
