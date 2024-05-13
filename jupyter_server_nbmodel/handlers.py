@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import sys
+import traceback
 import typing as t
+import uuid
+from functools import partial
 from http import HTTPStatus
 
 import nbformat
@@ -13,27 +18,172 @@ from jupyter_server.extension.handler import ExtensionHandlerMixin
 from .log import get_logger
 
 if t.TYPE_CHECKING:
+    import jupyter_client
+
     try:
-        import pycrdt as y
         import jupyter_server_ydoc
+        import pycrdt as y
         from jupyter_ydoc.ynotebook import YNotebook
     except ImportError:
         # optional dependencies
         ...
 
 
+class ExecutionStack:
+    """Execution request stack.
+
+    The request result can only be queried once.
+    """
+
+    def __init__(self):
+        self.__tasks: dict[str, asyncio.Task] = {}
+
+    def __del__(self):
+        for task in filter(lambda t: not t.cancelled(), self.__tasks.values()):
+            task.cancel()
+
+    def cancel(self, uid: str) -> None:
+        """Cancel the request ``uid``.
+
+        Args:
+            uid: Task identifier
+        """
+        get_logger().debug(f"Cancel request {uid}.")
+        if uid not in self.__tasks:
+            raise ValueError(f"Request {uid} does not exists.")
+
+        self.__tasks[uid].cancel()
+
+    def get(self, uid: str) -> t.Any:
+        """Get the request ``uid`` results or None.
+
+        Args:
+            uid (str): Request index
+
+        Returns:
+            Any: None if the request is pending else its result
+
+        Raises:
+            ValueError: If the request `uid` does not exists.
+            asyncio.CancelledError: If the request `uid` was cancelled.
+        """
+        if uid not in self.__tasks:
+            raise ValueError(f"Request {uid} does not exists.")
+
+        if self.__tasks[uid].done():
+            task = self.__tasks.pop(uid)
+            return task.result()
+        else:
+            return None
+
+    def put(self, task: t.Awaitable, *args) -> str:
+        """Add a asynchronous execution request.
+
+        Args:
+            task: Asynchronous task
+            *args : arguments of the task
+
+        Returns:
+            Request identifier
+        """
+        uid = uuid.uuid4()
+
+        async def execute_task(uid, f, *args) -> t.Any:
+            try:
+                get_logger().debug(f"Will execute request {uid}.")
+                result = await f(*args)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                exception_type, _, tb = sys.exc_info()
+                result = {
+                    "type": exception_type.__qualname__,
+                    "error": str(e),
+                    "message": repr(e),
+                    "traceback": traceback.format_tb(tb),
+                }
+                get_logger().error("Error for request %s.", result)
+            else:
+                get_logger().debug(f"Has executed request {uid}.")
+
+            return result
+
+        self.__tasks[uid] = asyncio.create_task(execute_task(uid, task, *args))
+        return uid
+
+
+async def execute_snippet(
+    km: jupyter_client.manager.KernelManager, snippet: str, ycell: y.Map
+) -> dict[str, t.Any]:
+    client = km.client()
+
+    if ycell is not None:
+        # Reset cell
+        del ycell["outputs"][:]
+        ycell["execution_count"] = None
+
+    outputs = []
+
+    # FIXME set the username of client.session to server user
+    # FIXME we don't check if the session is consistent (aka the kernel is linked to the document)
+    #   - should we?
+    try:
+        reply = await ensure_async(
+            client.execute_interactive(
+                snippet,
+                output_hook=partial(_output_hook, ycell, outputs),
+                stdin_hook=_stdin_hook if client.allow_stdin else None,
+            )
+        )
+
+        reply_content = reply["content"]
+
+        if ycell is not None:
+            ycell["execution_count"] = reply_content["execution_count"]
+
+        return {
+            "status": reply_content["status"],
+            "execution_count": reply_content["execution_count"],
+            # FIXME quid for buffers
+            "outputs": json.dumps(outputs),
+        }
+    finally:
+        del client
+
+
+def _output_hook(ycell, outputs, msg) -> None:
+    msg_type = msg["header"]["msg_type"]
+    if msg_type in ("display_data", "stream", "execute_result", "error"):
+        # FIXME support for version
+        output = nbformat.v4.output_from_msg(msg)
+        get_logger().info("Got an output. %s", output)
+        outputs.append(output)
+
+        if ycell is not None:
+            # FIXME support for 'stream'
+            outputs = ycell["outputs"]
+            with outputs.doc.transaction():
+                outputs.append(output)
+
+
+def _stdin_hook(msg) -> None:
+    get_logger().info("Code snippet execution is waiting for an input.")
+
+
 class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
+    """Handle request for snippet execution."""
+
     def initialize(
         self,
         name: str,
-        ydoc_extension: "jupyter_server_ydoc.app.YDocExtension" | None,
+        ydoc_extension: jupyter_server_ydoc.app.YDocExtension | None,
+        execution_stack: ExecutionStack,
         *args: t.Any,
         **kwargs: t.Any,
     ) -> None:
         super().initialize(name, *args, **kwargs)
+        self._execution_stack = execution_stack
         self._ydoc = ydoc_extension
-        self._outputs = []
-        self._ycell: y.Map | None = None
 
     @tornado.web.authenticated
     async def post(self, kernel_id: str) -> None:
@@ -82,8 +232,9 @@ class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
                 raise tornado.web.HTTPError(status_code=HTTPStatus.NOT_FOUND, reason=msg)
 
             ycells = filter(lambda c: c["id"] == cell_id, notebook.ycells)
+            ycell = None
             try:
-                self._ycell = next(ycells)
+                ycell = next(ycells)
             except StopIteration:
                 msg = f"Cell with ID {cell_id} not found in document {document_id}."
                 get_logger().error(msg)
@@ -95,7 +246,7 @@ class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
                 except StopIteration:
                     get_logger().warning("Multiple cells have the same ID '%s'.", cell_id)
 
-            if self._ycell["cell_type"] != "code":
+            if ycell["cell_type"] != "code":
                 msg = f"Cell with ID {cell_id} of document {document_id} is not of type code."
                 get_logger().error(msg)
                 raise tornado.web.HTTPError(
@@ -103,7 +254,7 @@ class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
                     reason=msg,
                 )
 
-            snippet = str(self._ycell["source"])
+            snippet = str(ycell["source"])
 
         try:
             km = self.kernel_manager.get_kernel(kernel_id)
@@ -112,57 +263,71 @@ class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
             get_logger().error(msg, exc_info=e)
             raise tornado.web.HTTPError(status_code=HTTPStatus.NOT_FOUND, reason=msg) from e
 
-        client = km.client()
+        uid = self._execution_stack.put(execute_snippet, km, snippet, ycell)
 
-        if self._ycell is not None:
-            # Reset cell
-            del self._ycell["outputs"][:]
-            self._ycell["execution_count"] = None
+        self.set_status(HTTPStatus.ACCEPTED)
+        self.set_header("Location", f"/api/kernels/{kernel_id}/requests/{uid}")
+        self.finish("{}")
 
-        # FIXME set the username of client.session to server user
-        # FIXME we don't check if the session is consistent (aka the kernel is linked to the document) - should we?
+
+class RequestHandler(ExtensionHandlerMixin, APIHandler):
+    """Handler for /api/kernels/<kernel_id>/requests/<request_id>"""
+
+    def initialize(
+        self, name: str, execution_stack: ExecutionStack, *args: t.Any, **kwargs: t.Any
+    ) -> None:
+        super().initialize(name, *args, **kwargs)
+        self._stack = execution_stack
+
+    @tornado.web.authenticated
+    def get(self, kernel_id: str, uid: str) -> None:
+        """`GET /api/kernels/<kernel_id>/requests/<id>` Returns the request ``uid`` status.
+
+        Status are:
+
+        * 200: Task result is returned
+        * 202: Task is pending
+        * 500: Task ends with errors
+
+        Args:
+            index: Request identifier
+
+        Raises:
+            404 if request ``uid`` does not exist
+        """
         try:
-            reply = await ensure_async(
-                client.execute_interactive(
-                    snippet,
-                    output_hook=self._output_hook,
-                    stdin_hook=self._stdin_hook if client.allow_stdin else None,
-                )
-            )
+            r = self._stack.get(uid)
+        except ValueError as err:
+            raise tornado.web.HTTPError(404, reason=str(err)) from err
+        else:
+            if r is None:
+                self.set_status(202)
+                self.finish("{}")
+            else:
+                if "error" in r:
+                    self.set_status(500)
+                    self.log.debug(f"{r}")
+                else:
+                    self.set_status(200)
+                self.finish(json.dumps(r))
 
-            reply_content = reply["content"]
+    @tornado.web.authenticated
+    def delete(self, kernel_id: str, uid: str) -> None:
+        """`DELETE /api/kernels/<kernel_id>/requests/<id>` cancels the request ``uid``.
 
-            if self._ycell is not None:
-                self._ycell["execution_count"] = reply_content["execution_count"]
+        Status are:
+        * 204: Request cancelled
 
-            self.finish(
-                {
-                    "status": reply_content["status"],
-                    "execution_count": reply_content["execution_count"],
-                    # FIXME quid for buffers
-                    "outputs": json.dumps(self._outputs),
-                }
-            )
+        Args:
+            uid: Request uid
 
-        finally:
-            self._outputs.clear()
-            self._ycell = None
-            del client
-
-    def _output_hook(self, msg) -> None:
-        msg_type = msg["header"]["msg_type"]
-        if msg_type in ("display_data", "stream", "execute_result", "error"):
-            # FIXME support for version
-            output = nbformat.v4.output_from_msg(msg)
-            get_logger().info("Got an output. %s", output)
-            self._outputs.append(output)
-
-            if self._ycell is not None:
-                # FIXME support for 'stream'
-                outputs = self._ycell["outputs"]
-                with outputs.doc.transaction():
-                    outputs.append(output)
-
-
-    def _stdin_hook(self, msg) -> None:
-        get_logger().info("Code snippet execution is waiting for an input.")
+        Raises:
+            404 if request ``uid`` does not exist
+        """
+        try:
+            self._stack.cancel(int(uid))
+        except ValueError as err:
+            raise tornado.web.HTTPError(404, reason=str(err)) from err
+        else:
+            self.set_status(204)
+            self.finish()
