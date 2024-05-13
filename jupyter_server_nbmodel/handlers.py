@@ -146,8 +146,9 @@ async def _execute_snippet(
 
     if ycell is not None:
         # Reset cell
-        del ycell["outputs"][:]
-        ycell["execution_count"] = None
+        with ycell.doc.transaction():
+            del ycell["outputs"][:]
+            ycell["execution_count"] = None
 
     outputs = []
 
