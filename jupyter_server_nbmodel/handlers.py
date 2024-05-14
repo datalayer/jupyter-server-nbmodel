@@ -46,18 +46,19 @@ class ExecutionStack:
         for task in filter(lambda t: not t.cancelled(), self.__tasks.values()):
             task.cancel()
 
-    def cancel(self, kernel_id: str, uid: str) -> None:
-        """Cancel the request ``uid``.
+    # FIXME
+    # def cancel(self, kernel_id: str, uid: str) -> None:
+    #     """Cancel the request ``uid``.
 
-        Args:
-            kernel_id : Kernel identifier
-            uid : Request identifier
-        """
-        get_logger().debug(f"Cancel request {uid}.")
-        if uid not in self.__tasks:
-            raise ValueError(f"Request {uid} does not exists.")
+    #     Args:
+    #         kernel_id : Kernel identifier
+    #         uid : Request identifier
+    #     """
+    #     get_logger().debug(f"Cancel request {uid}.")
+    #     if uid not in self.__tasks:
+    #         raise ValueError(f"Request {uid} does not exists.")
 
-        self.__tasks[uid].cancel()
+    #     self.__tasks[uid].cancel()
 
     def get(self, kernel_id: str, uid: str) -> t.Any:
         """Get the request ``uid`` results, its pending input or None.
@@ -421,24 +422,25 @@ class RequestHandler(ExtensionHandlerMixin, APIHandler):
                     self.set_status(200)
                 self.finish(json.dumps(r))
 
-    @tornado.web.authenticated
-    def delete(self, kernel_id: str, request_id: str) -> None:
-        """`DELETE /api/kernels/<kernel_id>/requests/<request_id>` cancels the request ``uid``.
+    # FIXME
+    # @tornado.web.authenticated
+    # def delete(self, kernel_id: str, request_id: str) -> None:
+    #     """`DELETE /api/kernels/<kernel_id>/requests/<request_id>` cancels the request ``uid``.
 
-        Status are:
-        * 204: Request cancelled
+    #     Status are:
+    #     * 204: Request cancelled
 
-        Args:
-            kernel_id: Kernel identifier
-            request_id: Request identifier
+    #     Args:
+    #         kernel_id: Kernel identifier
+    #         request_id: Request identifier
 
-        Raises:
-            404 if request ``uid`` does not exist
-        """
-        try:
-            self._stack.cancel(request_id)
-        except ValueError as err:
-            raise tornado.web.HTTPError(404, reason=str(err)) from err
-        else:
-            self.set_status(204)
-            self.finish()
+    #     Raises:
+    #         404 if request ``uid`` does not exist
+    #     """
+    #     try:
+    #         self._stack.cancel(kernel_id, request_id)
+    #     except ValueError as err:
+    #         raise tornado.web.HTTPError(404, reason=str(err)) from err
+    #     else:
+    #         self.set_status(204)
+    #         self.finish()

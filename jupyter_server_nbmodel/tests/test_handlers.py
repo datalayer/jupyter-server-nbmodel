@@ -140,3 +140,44 @@ async def test_post_erroneous_execute(jp_fetch, pending_kernel_is_ready, snippet
 
     response2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
     assert response2.code == 204
+
+
+# FIXME
+# @pytest.mark.timeout(TEST_TIMEOUT)
+# async def test_cancel_execute(jp_fetch, pending_kernel_is_ready):
+#     # Start the first kernel
+#     r = await jp_fetch(
+#         "api", "kernels", method="POST", body=json.dumps({"name": NATIVE_KERNEL_NAME})
+#     )
+#     kernel = json.loads(r.body.decode())
+#     await pending_kernel_is_ready(kernel["id"])
+
+#     response = await jp_fetch(
+#         "api",
+#         "kernels",
+#         kernel["id"],
+#         "execute",
+#         method="POST",
+#         body=json.dumps({"code": """import time
+# time.sleep(10)
+# print("end")
+# """}),
+#     )
+
+#     assert response.code == 202
+#     location = response.headers["Location"]
+
+#     # Cancel task
+#     response2 = await jp_fetch(location, method="DELETE")
+
+#     assert response2.code == 204
+
+#     response3 = await jp_fetch(location)
+#     payload = json.loads(response3.body)
+#     assert payload == {
+#         "status": "error",
+#         "execution_count": 1
+#     }
+
+#     r2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
+#     assert r2.code == 204
