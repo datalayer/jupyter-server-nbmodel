@@ -1,1 +1,1 @@
-c.YDocExtension.server_side_execution = True
+c.YDocExtension.server_side_execution = True  # noqa F821

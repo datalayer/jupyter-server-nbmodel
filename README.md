@@ -34,6 +34,83 @@ that the server extension is enabled:
 jupyter server extension list
 ```
 
+## How does it works
+
+### Generic case
+
+Execution of a Python code snippet: `print("hello")`
+
+```mermaid
+sequenceDiagram
+    Frontend->>+Server: POST /api/kernels/<id>/execute
+    Server->>+ExecutionStack: Create asyncio.Task
+    ExecutionStack->>Kernel: Execute request msg
+    activate Kernel
+    ExecutionStack-->>Server: Task uid
+    Server-->>-Frontend: Returns task uid
+    loop Running
+        Kernel->>Shared Document: Add output
+        Shared Document->>Frontend: Document update
+    end
+    loop While status is 202
+        Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
+        Server->>ExecutionStack: Get task result
+        ExecutionStack-->>Server: null
+        Server-->>-Frontend: Request status 202
+    end
+    Kernel-->>ExecutionStack: Execution reply
+    deactivate Kernel
+    Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
+    Server->>ExecutionStack: Get task result
+    ExecutionStack-->>Server: Result
+    Server-->>-Frontend: Status 200 & result
+```
+
+### With input case
+
+
+Execution of a Python code snippet: `input("Age:")`
+
+```mermaid
+sequenceDiagram
+    Frontend->>+Server: POST /api/kernels/<id>/execute
+    Server->>+ExecutionStack: Create asyncio.Task
+    ExecutionStack->>Kernel: Execute request msg
+    activate Kernel
+    ExecutionStack-->>Server: Task uid
+    Server-->>-Frontend: Returns task uid
+    loop Running
+        Kernel->>Shared Document: Add output
+        Shared Document->>Frontend: Document update
+    end
+    loop While status is 202
+        Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
+        Server->>ExecutionStack: Get task result
+        ExecutionStack-->>Server: null
+        Server-->>-Frontend: Request status 202
+    end
+    Kernel->>ExecutionStack: Set pending input
+    Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
+    Server->>ExecutionStack: Get task result
+    ExecutionStack-->>Server: Pending input
+    Server-->>-Frontend: Status 300 & Pending input
+    Frontend->>+Server: POST /api/kernels/<id>/input
+    Server->>Kernel: Send input msg
+    Server-->>-Frontend: 
+    loop While status is 202
+        Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
+        Server->>ExecutionStack: Get task result
+        ExecutionStack-->>Server: null
+        Server-->>-Frontend: Request status 202
+    end
+    Kernel-->>ExecutionStack: Execution reply
+    deactivate Kernel
+    Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
+    Server->>ExecutionStack: Get task result
+    ExecutionStack-->>Server: Result
+    Server-->>-Frontend: Status 200 & result
+```
+
 ## Contributing
 
 ### Development install
@@ -45,7 +122,6 @@ jupyter server extension list
 # The server extension.
 pip install -e .
 ```
-
 
 You can watch the source directory and run your Jupyter Server-based application at the same time in different terminals to watch for changes in the extension's source and automatically rebuild the extension.  For example,
 when running JupyterLab:
@@ -59,6 +135,25 @@ server directly:
 
 ```bash
 jupyter server --autoreload
+```
+
+### Manual testing
+
+```bash
+# Terminal 1.
+jupyter server --port 8888 --autoreload --ServerApp.disable_check_xsrf=True --IdentityProvider.token= --ServerApp.port_retries=0
+
+# Terminal 2.
+KERNEL=$(curl -X POST http://localhost:8888/api/kernels)
+echo $KERNEL
+KERNEL_ID=$(echo $KERNEL | jq --raw-output '.id')
+echo $KERNEL_ID
+REQUEST=$(curl --include http://localhost:8888/api/kernels/$KERNEL_ID/execute -d "{ \"code\": \"print('1+1')\" }")
+RESULT=$(echo $REQUEST | grep -i ^Location: | cut -d' ' -f2 | tr -d '\r')
+echo $RESULT
+
+curl http://localhost:8888$RESULT
+{"status": "ok", "execution_count": 1, "outputs": "[{\"output_type\": \"stream\", \"name\": \"stdout\", \"text\": \"1+1\\n\"}]"}
 ```
 
 ### Running Tests
@@ -78,7 +173,7 @@ pytest
 pytest jupyter_server_nbmodel/tests/test_handlers.py
 
 # To run a specific test
-pytest jupyter_server_nbmodel/tests/test_handlers.py -k "test_get"
+pytest jupyter_server_nbmodel/tests/test_handlers.py -k "test_post_execute"
 ```
 
 ### Development uninstall
