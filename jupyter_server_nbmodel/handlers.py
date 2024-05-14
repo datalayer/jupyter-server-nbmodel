@@ -375,6 +375,8 @@ class InputHandler(ExtensionHandlerMixin, APIHandler):
             client.stop_channels()
             del client
 
+        self.set_status(HTTPStatus.CREATED)
+
 
 class RequestHandler(ExtensionHandlerMixin, APIHandler):
     """Handler for /api/kernels/<kernel_id>/requests/<request_id>"""
