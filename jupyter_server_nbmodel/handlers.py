@@ -82,7 +82,9 @@ class ExecutionStack:
         else:
             return None
 
-    def put(self, km: jupyter_client.manager.KernelManager, snippet: str, ycell: y.Map) -> str:
+    def put(
+        self, km: jupyter_client.manager.KernelManager, snippet: str, ycell: y.Map | None
+    ) -> str:
         """Add a asynchronous execution request.
 
         Args:
@@ -99,18 +101,27 @@ class ExecutionStack:
         )
         return uid
 
-    def _stdin_hook(self, kernel_id, msg) -> None:
+    def _stdin_hook(self, kernel_id: str, msg: dict) -> None:
         get_logger().info(f"Execution request {kernel_id} received a input request {msg!s}")
         if kernel_id in self.__pending_inputs:
-            get_logger().error(f"Execution request {kernel_id} received a input request while waiting for an input.\n{msg}")
+            get_logger().error(
+                f"Execution request {kernel_id} received a input request while waiting for an input.\n{msg}"  # noqa: E501
+            )
 
         header = msg["header"].copy()
         header["date"] = header["date"].isoformat()
-        self.__pending_inputs[kernel_id] = {"parent_header": header, "input_request": msg["content"]}
+        self.__pending_inputs[kernel_id] = {
+            "parent_header": header,
+            "input_request": msg["content"],
+        }
 
 
 async def execute_task(
-    uid, km: jupyter_client.manager.KernelManager, snippet: str, ycell: y.Map, stdin_hook
+    uid,
+    km: jupyter_client.manager.KernelManager,
+    snippet: str,
+    ycell: y.Map | None,
+    stdin_hook: t.Callable[[dict], None] | None,
 ) -> t.Any:
     try:
         get_logger().debug(f"Will execute request {uid}.")
@@ -134,15 +145,11 @@ async def execute_task(
 
 async def _execute_snippet(
     uid: str,
-    km: jupyter_client.client.KernelClient,
+    km: jupyter_client.manager.KernelManager,
     snippet: str,
-    ycell: y.Map,
-    stdin_hook,
+    ycell: y.Map | None,
+    stdin_hook: t.Callable[[dict], None] | None,
 ) -> dict[str, t.Any]:
-    client = km.client()
-    client.session.session = uid
-    # FIXME
-    # client.session.username = username
 
     if ycell is not None:
         # Reset cell
@@ -151,6 +158,10 @@ async def _execute_snippet(
             ycell["execution_count"] = None
 
     outputs = []
+    client = km.client()
+    client.session.session = uid
+    # FIXME
+    # client.session.username = username
 
     # FIXME we don't check if the session is consistent (aka the kernel is linked to the document)
     #   - should we?
@@ -175,6 +186,7 @@ async def _execute_snippet(
             "outputs": json.dumps(outputs),
         }
     finally:
+        client.stop_channels()
         del client
 
 
@@ -252,6 +264,7 @@ class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
         body = self.get_json_body()
 
         snippet = body.get("code")
+        ycell = None
         # From RTC model
         if snippet is None:
             document_id = body.get("document_id")
@@ -280,7 +293,6 @@ class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
                 raise tornado.web.HTTPError(status_code=HTTPStatus.NOT_FOUND, reason=msg)
 
             ycells = filter(lambda c: c["id"] == cell_id, notebook.ycells)
-            ycell = None
             try:
                 ycell = next(ycells)
             except StopIteration:
@@ -337,9 +349,12 @@ class InputHandler(ExtensionHandlerMixin, APIHandler):
         try:
             # only send stdin reply if there *was not* another request
             # or execution finished while we were reading.
-            if not (await client.stdin_channel.msg_ready() or await client.shell_channel.msg_ready()):
+            if not (
+                await client.stdin_channel.msg_ready() or await client.shell_channel.msg_ready()
+            ):
                 client.input(body["input"])
         finally:
+            client.stop_channels()
             del client
 
 

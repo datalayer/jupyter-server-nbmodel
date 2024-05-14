@@ -1,11 +1,41 @@
 import asyncio
+import datetime
 import json
-
-from jupyter_client.kernelspec import NATIVE_KERNEL_NAME
+import re
 
 import pytest
+from jupyter_client.kernelspec import NATIVE_KERNEL_NAME
 
 TEST_TIMEOUT = 60
+SLEEP = 0.1
+
+
+REQUEST_REGEX = re.compile(r"^/api/kernels/\w+-\w+-\w+-\w+-\w+/requests/\w+-\w+-\w+-\w+-\w+$")
+
+
+async def _wait_request(fetch, endpoint: str):
+    """Poll periodically to fetch the execution request result."""
+    start_time = datetime.datetime.now()
+
+    while (datetime.datetime.now() - start_time).total_seconds() < 0.9 * TEST_TIMEOUT:
+        await asyncio.sleep(SLEEP)
+        response = await fetch(endpoint)
+        response.rethrow()
+        if response.code != 202:
+            return response
+
+    raise TimeoutError(f"Request {endpoint} timed out.")
+
+
+async def wait_for_request(fetch, *args, **kwargs):
+    """Wait for execution request."""
+    r = await fetch(*args, **kwargs)
+    assert r.code == 202
+    location = r.headers["Location"]
+    assert REQUEST_REGEX.match(location) is not None
+
+    ans = await _wait_request(fetch, location)
+    return ans
 
 
 @pytest.fixture()
@@ -39,7 +69,7 @@ def pending_kernel_is_ready(jp_serverapp):
         (
             """from IPython.display import HTML
 HTML('<p><b>Jupyter</b> rocks.</p>')""",
-            '{"output_type": "execute_result", "metadata": {}, "data": {"text/plain": "<IPython.core.display.HTML object>", "text/html": "<p><b>Jupyter</b> rocks.</p>"}, "execution_count": 1}',
+            '{"output_type": "execute_result", "metadata": {}, "data": {"text/plain": "<IPython.core.display.HTML object>", "text/html": "<p><b>Jupyter</b> rocks.</p>"}, "execution_count": 1}',  # noqa: E501
         ),
     ),
 )
@@ -50,7 +80,8 @@ async def test_post_execute(jp_fetch, pending_kernel_is_ready, snippet, output):
     kernel = json.loads(r.body.decode())
     await pending_kernel_is_ready(kernel["id"])
 
-    response = await jp_fetch(
+    response = await wait_for_request(
+        jp_fetch,
         "api",
         "kernels",
         kernel["id"],
@@ -89,7 +120,8 @@ async def test_post_erroneous_execute(jp_fetch, pending_kernel_is_ready, snippet
     kernel = json.loads(r.body.decode())
     await pending_kernel_is_ready(kernel["id"])
 
-    response = await jp_fetch(
+    response = await wait_for_request(
+        jp_fetch,
         "api",
         "kernels",
         kernel["id"],
