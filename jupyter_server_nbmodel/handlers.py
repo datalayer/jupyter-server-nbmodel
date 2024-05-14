@@ -33,6 +33,8 @@ if t.TYPE_CHECKING:
 class ExecutionStack:
     """Execution request stack.
 
+    It is keeping track of the execution requests.
+
     The request result can only be queried once.
     """
 
@@ -44,11 +46,12 @@ class ExecutionStack:
         for task in filter(lambda t: not t.cancelled(), self.__tasks.values()):
             task.cancel()
 
-    def cancel(self, uid: str) -> None:
+    def cancel(self, kernel_id: str, uid: str) -> None:
         """Cancel the request ``uid``.
 
         Args:
-            uid: Task identifier
+            kernel_id : Kernel identifier
+            uid : Request identifier
         """
         get_logger().debug(f"Cancel request {uid}.")
         if uid not in self.__tasks:
@@ -57,18 +60,18 @@ class ExecutionStack:
         self.__tasks[uid].cancel()
 
     def get(self, kernel_id: str, uid: str) -> t.Any:
-        """Get the request ``uid`` results or None.
+        """Get the request ``uid`` results, its pending input or None.
 
         Args:
             kernel_id : Kernel identifier
-            uid : Request index
+            uid : Request identifier
 
         Returns:
-            Any: None if the request is pending else its result
+            Any: None if the request is pending else its result or the pending input.
 
         Raises:
-            ValueError: If the request `uid` does not exists.
-            asyncio.CancelledError: If the request `uid` was cancelled.
+            ValueError: If the request ``uid`` does not exists.
+            asyncio.CancelledError: If the request ``uid`` was cancelled.
         """
         if uid not in self.__tasks:
             raise ValueError(f"Request {uid} does not exists.")
@@ -88,8 +91,9 @@ class ExecutionStack:
         """Add a asynchronous execution request.
 
         Args:
-            task: Asynchronous task
-            *args : arguments of the task
+            km: Kernel manager
+            snippet: Snippet to be executed
+            ycell: [optional] The cell to update with the execution results
 
         Returns:
             Request identifier
@@ -97,11 +101,15 @@ class ExecutionStack:
         uid = str(uuid.uuid4())
 
         self.__tasks[uid] = asyncio.create_task(
-            execute_task(uid, km, snippet, ycell, partial(self._stdin_hook, km.kernel_id))
+            _execute_task(uid, km, snippet, ycell, partial(self._stdin_hook, km.kernel_id))
         )
         return uid
 
     def _stdin_hook(self, kernel_id: str, msg: dict) -> None:
+        """Callback on stdin message.
+
+        It will register the pending input as temporary answer to the execution request.
+        """
         get_logger().info(f"Execution request {kernel_id} received a input request {msg!s}")
         if kernel_id in self.__pending_inputs:
             get_logger().error(
@@ -116,7 +124,7 @@ class ExecutionStack:
         }
 
 
-async def execute_task(
+async def _execute_task(
     uid,
     km: jupyter_client.manager.KernelManager,
     snippet: str,
@@ -335,7 +343,15 @@ class InputHandler(ExtensionHandlerMixin, APIHandler):
 
     @tornado.web.authenticated
     async def post(self, kernel_id: str) -> None:
-        body = self.get_json_body()
+        """
+        Send an input value to kernel ``kernel_id``.
+
+        Args:
+            kernel_id: Kernel identifier
+
+        Json Body Required:
+            input (str): Input value
+        """
 
         try:
             km = self.kernel_manager.get_kernel(kernel_id)
@@ -344,6 +360,7 @@ class InputHandler(ExtensionHandlerMixin, APIHandler):
             get_logger().error(msg, exc_info=e)
             raise tornado.web.HTTPError(status_code=HTTPStatus.NOT_FOUND, reason=msg) from e
 
+        body = self.get_json_body()
         client = km.client()
 
         try:
@@ -369,7 +386,7 @@ class RequestHandler(ExtensionHandlerMixin, APIHandler):
 
     @tornado.web.authenticated
     def get(self, kernel_id: str, request_id: str) -> None:
-        """`GET /api/kernels/<kernel_id>/requests/<id>` Returns the request ``uid`` status.
+        """`GET /api/kernels/<kernel_id>/requests/<request_id>` Returns the request ``uid`` status.
 
         Status are:
 
@@ -379,7 +396,8 @@ class RequestHandler(ExtensionHandlerMixin, APIHandler):
         * 500: Request ends with errors
 
         Args:
-            index: Request identifier
+            kernel_id: Kernel identifier
+            request_id: Request identifier
 
         Raises:
             404 if request ``uid`` does not exist
@@ -405,13 +423,14 @@ class RequestHandler(ExtensionHandlerMixin, APIHandler):
 
     @tornado.web.authenticated
     def delete(self, kernel_id: str, request_id: str) -> None:
-        """`DELETE /api/kernels/<kernel_id>/requests/<id>` cancels the request ``uid``.
+        """`DELETE /api/kernels/<kernel_id>/requests/<request_id>` cancels the request ``uid``.
 
         Status are:
         * 204: Request cancelled
 
         Args:
-            uid: Request uid
+            kernel_id: Kernel identifier
+            request_id: Request identifier
 
         Raises:
             404 if request ``uid`` does not exist
