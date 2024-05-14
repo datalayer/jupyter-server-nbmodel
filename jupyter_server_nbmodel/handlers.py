@@ -111,7 +111,7 @@ class ExecutionStack:
 
         It will register the pending input as temporary answer to the execution request.
         """
-        get_logger().info(f"Execution request {kernel_id} received a input request {msg!s}")
+        get_logger().debug(f"Execution request {kernel_id} received a input request.")
         if kernel_id in self.__pending_inputs:
             get_logger().error(
                 f"Execution request {kernel_id} received a input request while waiting for an input.\n{msg}"  # noqa: E501
@@ -186,11 +186,11 @@ async def _execute_snippet(
         reply_content = reply["content"]
 
         if ycell is not None:
-            ycell["execution_count"] = reply_content["execution_count"]
+            ycell["execution_count"] = reply_content.get("execution_count")
 
         return {
             "status": reply_content["status"],
-            "execution_count": reply_content["execution_count"],
+            "execution_count": reply_content.get("execution_count"),
             # FIXME quid for buffers
             "outputs": json.dumps(outputs),
         }
