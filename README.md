@@ -61,6 +61,25 @@ server directly:
 jupyter server --autoreload
 ```
 
+### Manual testing
+
+```bash
+# Terminal 1.
+jupyter server --port 8888 --autoreload --ServerApp.disable_check_xsrf=True --IdentityProvider.token= --ServerApp.port_retries=0
+
+# Terminal 2.
+KERNEL=$(curl -X POST http://localhost:8888/api/kernels)
+echo $KERNEL
+KERNEL_ID=$(echo $KERNEL | jq --raw-output '.id')
+echo $KERNEL_ID
+REQUEST=$(curl --include http://localhost:8888/api/kernels/$KERNEL_ID/execute -d "{ \"code\": \"print('1+1')\" }")
+RESULT=$(echo $REQUEST | grep -i ^Location: | cut -d' ' -f2 | tr -d '\r')
+echo $RESULT
+
+curl http://localhost:8888$RESULT
+{"status": "ok", "execution_count": 1, "outputs": "[{\"output_type\": \"stream\", \"name\": \"stdout\", \"text\": \"1+1\\n\"}]"}
+```
+
 ### Running Tests
 
 Install dependencies:
@@ -78,7 +97,7 @@ pytest
 pytest jupyter_server_nbmodel/tests/test_handlers.py
 
 # To run a specific test
-pytest jupyter_server_nbmodel/tests/test_handlers.py -k "test_get"
+pytest jupyter_server_nbmodel/tests/test_handlers.py -k "test_post_execute"
 ```
 
 ### Development uninstall
