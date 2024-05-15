@@ -7,6 +7,7 @@ import sys
 import traceback
 import typing as t
 import uuid
+from collections import namedtuple
 from functools import partial
 from http import HTTPStatus
 
@@ -29,6 +30,8 @@ if t.TYPE_CHECKING:
         # optional dependencies
         ...
 
+PendingInput = namedtuple("PendingInput", ["request_id", "content"])
+
 
 class ExecutionStack:
     """Execution request stack.
@@ -39,7 +42,7 @@ class ExecutionStack:
     """
 
     def __init__(self):
-        self.__pending_inputs: dict[str, dict] = {}
+        self.__pending_inputs: dict[str, PendingInput] = {}
         self.__tasks: dict[str, asyncio.Task] = {}
 
     def __del__(self):
@@ -78,7 +81,12 @@ class ExecutionStack:
             raise ValueError(f"Request {uid} does not exists.")
 
         if kernel_id in self.__pending_inputs:
-            return self.__pending_inputs.pop(kernel_id)
+            get_logger().info(f"Kernel '{kernel_id}' has a pending input.")
+            # Check the request id is the one matching the appearance of the input
+            # Otherwise another cell still looking for its results may capture the
+            # pending input
+            if uid == self.__pending_inputs[kernel_id].request_id:
+                return self.__pending_inputs.pop(kernel_id).content
 
         if self.__tasks[uid].done():
             task = self.__tasks.pop(uid)
@@ -102,11 +110,11 @@ class ExecutionStack:
         uid = str(uuid.uuid4())
 
         self.__tasks[uid] = asyncio.create_task(
-            _execute_task(uid, km, snippet, ycell, partial(self._stdin_hook, km.kernel_id))
+            _execute_task(uid, km, snippet, ycell, partial(self._stdin_hook, km.kernel_id, uid))
         )
         return uid
 
-    def _stdin_hook(self, kernel_id: str, msg: dict) -> None:
+    def _stdin_hook(self, kernel_id: str, request_id: str, msg: dict) -> None:
         """Callback on stdin message.
 
         It will register the pending input as temporary answer to the execution request.
@@ -119,10 +127,13 @@ class ExecutionStack:
 
         header = msg["header"].copy()
         header["date"] = header["date"].isoformat()
-        self.__pending_inputs[kernel_id] = {
-            "parent_header": header,
-            "input_request": msg["content"],
-        }
+        self.__pending_inputs[kernel_id] = PendingInput(
+            request_id,
+            {
+                "parent_header": header,
+                "input_request": msg["content"],
+            },
+        )
 
 
 async def _execute_task(
@@ -159,7 +170,6 @@ async def _execute_snippet(
     ycell: y.Map | None,
     stdin_hook: t.Callable[[dict], None] | None,
 ) -> dict[str, t.Any]:
-
     if ycell is not None:
         # Reset cell
         with ycell.doc.transaction():
@@ -294,7 +304,7 @@ class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
                     status_code=HTTPStatus.INTERNAL_SERVER_ERROR, reason=msg
                 )
 
-            notebook: YNotebook = await self._ydoc.get_document(document_id=document_id, copy=False)
+            notebook: YNotebook = await self._ydoc.get_document(room_id=document_id, copy=False)
 
             if notebook is None:
                 msg = f"Document with ID {document_id} not found."
@@ -310,9 +320,7 @@ class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
                 raise tornado.web.HTTPError(status_code=HTTPStatus.NOT_FOUND, reason=msg)  # noqa: B904
             else:
                 # Check if there is more than one cell
-                try:
-                    next(ycells)
-                except StopIteration:
+                if next(ycells, None) is not None:
                     get_logger().warning("Multiple cells have the same ID '%s'.", cell_id)
 
             if ycell["cell_type"] != "code":
