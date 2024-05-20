@@ -53,9 +53,16 @@
         "watch:labextension": "jupyter labextension watch ."
     },
     "dependencies": {
-        "@jupyterlab/application": "^4.0.0",
-        "@jupyterlab/coreutils": "^6.0.0",
-        "@jupyterlab/services": "^7.0.0"
+        "@jupyterlab/application": "^4.2.0",
+        "@jupyterlab/apputils": "^4.2.0",
+        "@jupyterlab/cells": "^4.2.0",
+        "@jupyterlab/coreutils": "^6.2.0",
+        "@jupyterlab/notebook": "^4.2.0",
+        "@jupyterlab/outputarea": "^4.2.0",
+        "@jupyterlab/services": "^7.2.0",
+        "@jupyterlab/translation": "^4.2.0",
+        "@lumino/coreutils": "^2.1.0",
+        "@lumino/widgets": "^2.3.0"
     },
     "devDependencies": {
         "@jupyterlab/builder": "^4.0.0",
@@ -95,15 +102,19 @@
     },
     "jupyterlab": {
         "discovery": {
-        "server": {
-            "managers": [
-                "pip"
-            ],
-            "base": {
-                "name": "jupyter_server_nbmodel"
+            "server": {
+                "managers": [
+                    "pip"
+                ],
+                "base": {
+                    "name": "jupyter_server_nbmodel"
+                }
             }
-        }
         },
+        "disabledExtensions": [
+          "@jupyterlab/notebook-extension:cell-executor",
+          "@jupyter/docprovider-extension:notebook-cell-executor"
+        ],
         "extension": true,
         "outputDir": "jupyter_server_nbmodel/labextension"
     },
