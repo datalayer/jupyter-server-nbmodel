@@ -1,5 +1,19 @@
+*.bundle.*
+lib/
+node_modules/
+*.log
+.eslintcache
+.stylelintcache
 *.egg-info/
 .ipynb_checkpoints
+*.tsbuildinfo
+jupyter_server_nbmodel/labextension
+# Version file is handled by hatchling
+jupyter_server_nbmodel/_version.py
+
+# Integration tests
+ui-tests/test-results/
+ui-tests/playwright-report/
 
 # Created by https://www.gitignore.io/api/python
 # Edit at https://www.gitignore.io/?templates=python
@@ -16,8 +30,11 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+develop-eggs/
 dist/
 downloads/
+eggs/
+.eggs/
 lib/
 lib64/
 parts/
@@ -27,6 +44,8 @@ wheels/
 pip-wheel-metadata/
 share/python-wheels/
 .installed.cfg
+*.egg
+MANIFEST
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -46,6 +65,7 @@ htmlcov/
 .coverage.*
 .cache
 nosetests.xml
+coverage/
 coverage.xml
 *.cover
 .hypothesis/
@@ -102,3 +122,6 @@ dmypy.json
 .DS_Store
 .jupyter_ystore.db
 .vscode
+
+# Yarn cache
+.yarn/

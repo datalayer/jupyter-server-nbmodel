@@ -29,8 +29,18 @@ def _(*args, **kwargs):
 # verify the environment is self-consistent before even starting
 _(sys.executable, "-m", "pip", "check")
 
-# install the bextension
+# install the labextension
 _(sys.executable, "-m", "pip", "install", "-e", ".")
+_(sys.executable, "-m", "jupyter", "labextension", "develop", "--overwrite", ".")
+_(
+    sys.executable,
+    "-m",
+    "jupyter",
+    "server",
+    "extension",
+    "enable",
+    "jupyter_server_nbmodel",
+)
 
 # verify the environment the extension didn't break anything
 _(sys.executable, "-m", "pip", "check")
@@ -38,6 +48,8 @@ _(sys.executable, "-m", "pip", "check")
 # list the extensions
 _("jupyter", "server", "extension", "list")
 
+# initially list installed extensions to determine if there are any surprises
+_("jupyter", "labextension", "list")
 
 
 print("JupyterLab with jupyter_server_nbmodel is ready to run with:\n")
