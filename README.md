@@ -54,7 +54,7 @@ Execution of a Python code snippet: `print("hello")`
 ```mermaid
 sequenceDiagram
     Frontend->>+Server: POST /api/kernels/<id>/execute
-    Server->>+ExecutionStack: Create asyncio.Task
+    Server->>+ExecutionStack: Queue request
     ExecutionStack->>Kernel: Execute request msg
     activate Kernel
     ExecutionStack-->>Server: Task uid
@@ -85,7 +85,7 @@ Execution of a Python code snippet: `input("Age:")`
 ```mermaid
 sequenceDiagram
     Frontend->>+Server: POST /api/kernels/<id>/execute
-    Server->>+ExecutionStack: Create asyncio.Task
+    Server->>+ExecutionStack: Queue request
     ExecutionStack->>Kernel: Execute request msg
     activate Kernel
     ExecutionStack-->>Server: Task uid
@@ -121,6 +121,14 @@ sequenceDiagram
     ExecutionStack-->>Server: Result
     Server-->>-Frontend: Status 200 & result
 ```
+
+> [!NOTE]
+> The code snippet is always send in the body of the POST `/api/kernels/<id>/execute`
+> request to avoid document model discrepancy; the document on the backend is only
+> eventually identical with the frontends (document updates are not instantaneous).
+>
+> The `ExecutionStack` maintains an execution queue per kernels to ensure execution
+> order.
 
 ## Contributing
 
