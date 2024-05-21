@@ -7,6 +7,6 @@ pytest_plugins = ("pytest_jupyter.jupyter_server", )
 def jp_server_config(jp_server_config):
     return {
         "ServerApp": {
-            "jpserver_extensions": {"jupyter_server_nbmodel": True, "jupyter_server_ydoc": True}
+            "jpserver_extensions": {"jupyter_server_nbmodel": True, "jupyter_server_ydoc": False}
         }
     }

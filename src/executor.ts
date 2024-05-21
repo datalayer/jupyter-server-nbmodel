@@ -105,12 +105,16 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
             this._serverSettings.baseUrl,
             `api/kernels/${kernelId}/execute`
           );
+          const code = cell.model.sharedModel.getSource();
           const cellId = cell.model.sharedModel.getId();
           const documentId = notebook.sharedModel.getState('document_id');
 
           const init = {
             method: 'POST',
-            body: JSON.stringify({ cell_id: cellId, document_id: documentId })
+            body: JSON.stringify({
+              code,
+              metadata: { cell_id: cellId, document_id: documentId }
+            })
           };
           onCellExecutionScheduled({ cell });
           let success = false;

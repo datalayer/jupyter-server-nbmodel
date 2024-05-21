@@ -4,10 +4,11 @@ import json
 import re
 
 import pytest
+from flaky import flaky
 from jupyter_client.kernelspec import NATIVE_KERNEL_NAME
 
-TEST_TIMEOUT = 60
-SLEEP = 0.1
+TEST_TIMEOUT = 15
+SLEEP = 0.25
 
 
 REQUEST_REGEX = re.compile(r"^/api/kernels/\w+-\w+-\w+-\w+-\w+/requests/\w+-\w+-\w+-\w+-\w+$")
@@ -16,8 +17,8 @@ REQUEST_REGEX = re.compile(r"^/api/kernels/\w+-\w+-\w+-\w+-\w+/requests/\w+-\w+-
 async def _wait_request(fetch, endpoint: str):
     """Poll periodically to fetch the execution request result."""
     start_time = datetime.datetime.now()
-
-    while (datetime.datetime.now() - start_time).total_seconds() < 0.9 * TEST_TIMEOUT:
+    elapsed = 0.
+    while elapsed < 0.9 * TEST_TIMEOUT:
         await asyncio.sleep(SLEEP)
         response = await fetch(endpoint, raise_error=False)
         if response.code >= 400:
@@ -25,7 +26,9 @@ async def _wait_request(fetch, endpoint: str):
         if response.code != 202:
             return response
 
-    raise TimeoutError(f"Request {endpoint} timed out.")
+        elapsed = (datetime.datetime.now() - start_time).total_seconds()
+
+    raise TimeoutError(f"Request {endpoint} timed out ({elapsed}s).")
 
 
 async def wait_for_request(fetch, *args, **kwargs):
@@ -102,6 +105,8 @@ async def test_post_execute(jp_fetch, pending_kernel_is_ready, snippet, output):
     response2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
     assert response2.code == 204
 
+    await asyncio.sleep(1)
+
 
 @pytest.mark.timeout(TEST_TIMEOUT)
 @pytest.mark.parametrize(
@@ -141,6 +146,8 @@ async def test_post_erroneous_execute(jp_fetch, pending_kernel_is_ready, snippet
 
     response2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
     assert response2.code == 204
+
+    await asyncio.sleep(1)
 
 
 @pytest.mark.timeout(TEST_TIMEOUT)
@@ -189,6 +196,8 @@ async def test_post_input_execute(jp_fetch, pending_kernel_is_ready):
 
     r2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
     assert r2.code == 204
+
+    await asyncio.sleep(1)
 
 
 # FIXME
