@@ -12,4 +12,3 @@ project_short_description: A Jupyter Server extension to execute code cell from 
 python_name: jupyter_server_nbmodel
 repository: https://github.com/datalayer/jupyter-server-nbmodel
 test: true
-

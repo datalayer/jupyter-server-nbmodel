@@ -112,8 +112,8 @@
             }
         },
         "disabledExtensions": [
-          "@jupyterlab/notebook-extension:cell-executor",
-          "@jupyter/docprovider-extension:notebook-cell-executor"
+            "@jupyterlab/notebook-extension:cell-executor",
+            "@jupyter/docprovider-extension:notebook-cell-executor"
         ],
         "extension": true,
         "outputDir": "jupyter_server_nbmodel/labextension"

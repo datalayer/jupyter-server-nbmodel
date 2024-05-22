@@ -69,7 +69,7 @@ Here is a summary of the steps to cut a new release:
 - Check the draft changelog
 - Run the "Step 2: Publish Release" workflow
 
-> [!NOTE]
+> \[!NOTE\]
 > Check out the [workflow documentation](https://jupyter-releaser.readthedocs.io/en/latest/get_started/making_release_from_repo.html)
 > for more information.
 

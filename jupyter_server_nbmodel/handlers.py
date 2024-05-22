@@ -5,7 +5,7 @@ import json
 import os
 import typing as t
 import uuid
-from dataclasses import asdict, dataclass, is_dataclass
+from dataclasses import asdict, dataclass
 from functools import partial
 from http import HTTPStatus
 
@@ -75,7 +75,7 @@ async def _get_ycell(
     metadata: dict | None,
 ) -> y.Map | None:
     if ydoc is None:
-        msg = "jupyter-collaboration extension is not installed on the server. Outputs won't be written within the document."
+        msg = "jupyter-collaboration extension is not installed on the server. Outputs won't be written within the document."  # noqa: E501
         get_logger().warning(msg)
         return None
 
@@ -262,6 +262,7 @@ async def _kernel_worker(
 
     if to_raise is not None:
         raise to_raise
+
 
 class ExecutionStack:
     """Execution request stack.

@@ -31,7 +31,7 @@ repos:
           [mdformat-gfm, mdformat-frontmatter, mdformat-footnote]
 
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: 0.4.4
+    rev: v0.4.4
     hooks:
       - id: ruff
         args: ["--fix"]

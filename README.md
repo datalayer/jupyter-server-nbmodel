@@ -11,7 +11,7 @@ for the frontend extension.
 ## Requirements
 
 - Jupyter Server
-- [optional] JupyterLab >= 4.0.0
+- \[optional\] JupyterLab >= 4.0.0
 
 ## Install
 
@@ -79,7 +79,6 @@ sequenceDiagram
 
 ### With input case
 
-
 Execution of a Python code snippet: `input("Age:")`
 
 ```mermaid
@@ -107,7 +106,7 @@ sequenceDiagram
     Server-->>-Frontend: Status 300 & Pending input
     Frontend->>+Server: POST /api/kernels/<id>/input
     Server->>Kernel: Send input msg
-    Server-->>-Frontend: 
+    Server-->>-Frontend:
     loop While status is 202
         Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
         Server->>ExecutionStack: Get task result
@@ -122,7 +121,7 @@ sequenceDiagram
     Server-->>-Frontend: Status 200 & result
 ```
 
-> [!NOTE]
+> \[!NOTE\]
 > The code snippet is always send in the body of the POST `/api/kernels/<id>/execute`
 > request to avoid document model discrepancy; the document on the backend is only
 > eventually identical with the frontends (document updates are not instantaneous).
@@ -219,7 +218,6 @@ This extension uses [Playwright](https://playwright.dev/docs/intro) for the inte
 More precisely, the JupyterLab helper [Galata](https://github.com/jupyterlab/jupyterlab/tree/master/galata) is used to handle testing the extension in JupyterLab.
 
 More information are provided within the [ui-tests](./ui-tests/README.md) README.
-
 
 ### Manual testing
 

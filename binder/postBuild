@@ -12,7 +12,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path.cwd()
 
 def _(*args, **kwargs):

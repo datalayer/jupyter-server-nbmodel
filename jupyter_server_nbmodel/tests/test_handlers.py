@@ -4,7 +4,6 @@ import json
 import re
 
 import pytest
-from flaky import flaky
 from jupyter_client.kernelspec import NATIVE_KERNEL_NAME
 
 TEST_TIMEOUT = 15
@@ -17,7 +16,7 @@ REQUEST_REGEX = re.compile(r"^/api/kernels/\w+-\w+-\w+-\w+-\w+/requests/\w+-\w+-
 async def _wait_request(fetch, endpoint: str):
     """Poll periodically to fetch the execution request result."""
     start_time = datetime.datetime.now()
-    elapsed = 0.
+    elapsed = 0.0
     while elapsed < 0.9 * TEST_TIMEOUT:
         await asyncio.sleep(SLEEP)
         response = await fetch(endpoint, raise_error=False)
@@ -182,16 +181,13 @@ async def test_post_input_execute(jp_fetch, pending_kernel_is_ready):
     )
     assert response3.code == 201
 
-    response4 = await _wait_request(
-        jp_fetch,
-        location
-    )
+    response4 = await _wait_request(jp_fetch, location)
     assert response4.code == 200
     payload2 = json.loads(response4.body)
     assert payload2 == {
         "status": "ok",
         "execution_count": 1,
-        "outputs": '[{"output_type": "execute_result", "metadata": {}, "data": {"text/plain": "\'42\'"}, "execution_count": 1}]',
+        "outputs": '[{"output_type": "execute_result", "metadata": {}, "data": {"text/plain": "\'42\'"}, "execution_count": 1}]',  # noqa: E501
     }
 
     r2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
