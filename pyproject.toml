@@ -1,44 +1,74 @@
 [build-system]
-requires = ["hatchling>=1.5"]
+requires = ["hatchling>=1.5.0", "jupyterlab>=4.0.0,<5", "hatch-nodejs-version>=0.3.2"]
 build-backend = "hatchling.build"
 
 [project]
 name = "jupyter_server_nbmodel"
-authors = [{ name = "Datalayer" }]
-dynamic = ["version"]
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.8"
-keywords = ["Jupyter", "Extension"]
 classifiers = [
-  "License :: OSI Approved :: BSD License",
-  "Programming Language :: Python",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Framework :: Jupyter",
+    "Framework :: Jupyter",
+    "Framework :: Jupyter :: JupyterLab",
+    "Framework :: Jupyter :: JupyterLab :: 4",
+    "Framework :: Jupyter :: JupyterLab :: Extensions",
+    "Framework :: Jupyter :: JupyterLab :: Extensions :: Prebuilt",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
-dependencies = ["jupyter_server>=1.6,<3"]
+dependencies = [
+    "jupyter_server>=2.0.1,<3"
+]
+dynamic = ["version", "description", "authors", "urls", "keywords"]
 
 [project.optional-dependencies]
 rtc = ["jupyterlab>=4.2.0", "jupyter_collaboration>=3.0.0a0"]
-test = ["pytest~=8.2", "pytest-jupyter[server]>=0.6", "pytest-timeout"]
+test = ["pytest~=8.2", "pytest-cov", "pytest-jupyter[server]>=0.6", "pytest-timeout"]
 lint = ["mdformat>0.7", "mdformat-gfm>=0.3.5", "ruff>=0.4.0"]
 typing = ["mypy>=0.990"]
 
-[project.license]
-file = "LICENSE"
-
-[project.urls]
-Home = "https://github.com/datalayer/jupyter-server-nbmodel"
-
 [tool.hatch.version]
-path = "jupyter_server_nbmodel/__init__.py"
+source = "nodejs"
+
+[tool.hatch.metadata.hooks.nodejs]
+fields = ["description", "authors", "urls"]
+
+[tool.hatch.build.targets.sdist]
+artifacts = ["jupyter_server_nbmodel/labextension"]
+exclude = [".github", "binder"]
 
 [tool.hatch.build.targets.wheel.shared-data]
-"jupyter-config" = "etc/jupyter"
+"jupyter_server_nbmodel/labextension" = "share/jupyter/labextensions/jupyter-server-nbmodel"
+"install.json" = "share/jupyter/labextensions/jupyter-server-nbmodel/install.json"
+"jupyter-config/server-config" = "etc/jupyter/jupyter_server_config.d"
+
+[tool.hatch.build.hooks.version]
+path = "jupyter_server_nbmodel/_version.py"
+
+[tool.hatch.build.hooks.jupyter-builder]
+dependencies = ["hatch-jupyter-builder>=0.5"]
+build-function = "hatch_jupyter_builder.npm_builder"
+ensured-targets = [
+    "jupyter_server_nbmodel/labextension/static/style.js",
+    "jupyter_server_nbmodel/labextension/package.json",
+]
+skip-if-exists = ["jupyter_server_nbmodel/labextension/static/style.js"]
+
+[tool.hatch.build.hooks.jupyter-builder.build-kwargs]
+build_cmd = "build:prod"
+npm = ["jlpm"]
+
+[tool.hatch.build.hooks.jupyter-builder.editable-build-kwargs]
+build_cmd = "install:extension"
+npm = ["jlpm"]
+source_dir = "src"
+build_dir = "jupyter_server_nbmodel/labextension"
 
 [tool.pytest.ini_options]
 filterwarnings = [
@@ -61,14 +91,11 @@ warn_unused_configs = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 
-[tool.black]
-line-length = 100
-target-version = ["py38"]
-skip-string-normalization = true
-
 [tool.ruff]
 target-version = "py38"
 line-length = 100
+
+[tool.ruff.lint]
 select = [
   "A",
   "B",
@@ -97,6 +124,25 @@ ignore = [
   "C901",
 ]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
+# S603 `subprocess` call: check for execution of untrusted input
+# T201 `print` found
+"binder/postBuild" = ["S603", "T201"]
 # S101 Use of `assert` detected
 "jupyter_server_nbmodel/tests/*" = ["S101"]
+# F821 Undefined name `c`
+"ui-tests/jupyter_server_test_config.py" = ["F821"]
+
+[tool.jupyter-releaser.options]
+version_cmd = "hatch version"
+
+[tool.jupyter-releaser.hooks]
+before-build-npm = [
+    "python -m pip install 'jupyterlab>=4.0.0,<5'",
+    "jlpm",
+    "jlpm build:prod"
+]
+before-build-python = ["jlpm clean:all"]
+
+[tool.check-wheel-contents]
+ignore = ["W002"]
