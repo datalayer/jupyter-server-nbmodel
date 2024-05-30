@@ -106,7 +106,7 @@ sequenceDiagram
     Server-->>-Frontend: Status 300 & Pending input
     Frontend->>+Server: POST /api/kernels/<id>/input
     Server->>Kernel: Send input msg
-    Server-->>-Frontend:
+    Server-->>-Frontend: Returns
     loop While status is 202
         Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
         Server->>ExecutionStack: Get task result
