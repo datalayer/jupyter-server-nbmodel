@@ -8,6 +8,9 @@ This extension is composed of a Python package named `jupyter_server_nbmodel`
 for the server extension and a NPM package named `jupyter-server-nbmodel`
 for the frontend extension.
 
+It contains the experimental code from https://github.com/Zsailer/nextgen-kernels-api.
+We are very grateful to @Zsailer to share that piece of code.
+
 ## Requirements
 
 - Jupyter Server

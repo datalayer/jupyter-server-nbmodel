@@ -1,0 +1,3 @@
+[submodule "nextgen-kernels-api"]
+	path = nextgen-kernels-api
+	url = git@github.com:fcollonval/nextgen-kernels-api.git
