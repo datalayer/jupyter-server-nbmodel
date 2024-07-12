@@ -15,7 +15,7 @@ STOP_TIMEOUT = 3
 _request_id_regex = r"(?P<request_id>\w+-\w+-\w+-\w+-\w+)"
 
 
-class Extension(ExtensionApp):
+class ServerRunnerApp(ExtensionApp):
     name = "jupyter_server_nbmodel"
 
     def initialize_handlers(self):
@@ -54,6 +54,6 @@ class Extension(ExtensionApp):
         )
 
     async def stop_extension(self):
+        get_logger().info("Disposing the execution stack…")
         if hasattr(self, "__execution_stack"):
-            get_logger().info("Disposing the execution stack…")
-            await asyncio.wait_for(self.__execution_stack.dispose(), timeout=3)
+            await asyncio.shield(self.__execution_stack.dispose())

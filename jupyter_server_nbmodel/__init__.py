@@ -8,7 +8,7 @@ except ImportError:
 
     warnings.warn("Importing 'jupyter_server_nbmodel' outside a proper installation.", stacklevel=1)
     __version__ = "dev"
-from .extension import Extension
+from .extension import ServerRunnerApp
 
 
 def _jupyter_labextension_paths():
@@ -16,4 +16,4 @@ def _jupyter_labextension_paths():
 
 
 def _jupyter_server_extension_points():
-    return [{"module": "jupyter_server_nbmodel", "app": Extension}]
+    return [{"module": "jupyter_server_nbmodel", "app": ServerRunnerApp}]
