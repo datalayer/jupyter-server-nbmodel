@@ -2,6 +2,8 @@
 
 [![Github Actions Status](https://github.com/datalayer/jupyter-server-nbmodel/workflows/Build/badge.svg)](https://github.com/datalayer/jupyter-server-nbmodel/actions/workflows/build.yml)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/datalayer/jupyter-server-nbmodel/main?urlpath=lab)
+
+
 A Jupyter Server extension to execute code cell from the server.
 
 This extension is composed of a Python package named `jupyter_server_nbmodel`
