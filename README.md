@@ -13,7 +13,8 @@ for the frontend extension.
 ## Requirements
 
 - Jupyter Server
-- \[optional\] JupyterLab >= 4.0.0
+- \[recommended\] Real-time collaboration for JupyterLab/Notebook:
+    This will push the kernels results in the notebook from the server.
 
 ## Install
 
@@ -21,6 +22,12 @@ To install the extension, execute:
 
 ```bash
 pip install jupyter_server_nbmodel
+```
+
+Or with recommendations:
+
+```bash
+pip install jupyter_server_nbmodel[rtc]
 ```
 
 ## Uninstall
