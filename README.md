@@ -17,7 +17,13 @@ for the frontend extension.
 
 ## Install
 
-To install the extension, execute:
+To install the extension for use in JupyterLab or Notebook 7, execute:
+
+```bash
+pip install jupyter_server_nbmodel[lab]
+```
+
+For API-only use:
 
 ```bash
 pip install jupyter_server_nbmodel

@@ -29,8 +29,7 @@ dependencies = [
 dynamic = ["version", "description", "authors", "urls", "keywords"]
 
 [project.optional-dependencies]
-# FIXME we should be able to only use the server part without UI
-rtc = ["jupyterlab>=4.2.0", "jupyter_collaboration>=3.0.0b0"]
+lab = ["jupyterlab>=4.2.0", "jupyter-docprovider>=1.0.0b1", "jupyter-server-ydoc>=1.0.0b1"]
 test = ["pytest~=8.2", "pytest-cov", "pytest-jupyter[server]>=0.6", "pytest-timeout"]
 lint = ["mdformat>0.7", "mdformat-gfm>=0.3.5", "ruff>=0.4.0"]
 typing = ["mypy>=0.990"]
