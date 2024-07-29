@@ -13,7 +13,7 @@ for the frontend extension.
 
 - Jupyter Server
 - \[recommended\] Real-time collaboration for JupyterLab/Notebook:
-   This will push the kernels results in the notebook from the server.
+  This will push the kernels results in the notebook from the server.
 
 ## Install
 
