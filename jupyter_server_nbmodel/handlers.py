@@ -23,6 +23,7 @@ from .log import get_logger
 
 if t.TYPE_CHECKING:
     import jupyter_client
+    from nbformat import NotebookNode
 
     try:
         import jupyter_server_ydoc
@@ -74,6 +75,14 @@ async def _get_ycell(
     ydoc: jupyter_server_ydoc.app.YDocExtension | None,
     metadata: dict | None,
 ) -> y.Map | None:
+    """Get the cell from which the execution was triggered.
+
+    Args:
+        ydoc: The YDoc jupyter server extension
+        metadata: Execution context
+    Returns:
+        The cell
+    """
     if ydoc is None:
         msg = "jupyter-collaboration extension is not installed on the server. Outputs won't be written within the document."  # noqa: E501
         get_logger().warning(msg)
@@ -89,7 +98,7 @@ async def _get_ycell(
         get_logger().debug(msg)
         return None
 
-    notebook: YNotebook = await ydoc.get_document(room_id=document_id, copy=False)
+    notebook: YNotebook | None = await ydoc.get_document(room_id=document_id, copy=False)
 
     if notebook is None:
         msg = f"Document with ID {document_id} not found."
@@ -118,7 +127,14 @@ async def _get_ycell(
     return ycell
 
 
-def _output_hook(ycell, outputs, msg) -> None:
+def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) -> None:
+    """Callback on execution request when an output is emitted.
+
+    Args:
+        outputs: A list of previously emitted outputs
+        ycell: The cell being executed
+        msg: The output message
+    """
     msg_type = msg["header"]["msg_type"]
     if msg_type in ("display_data", "stream", "execute_result", "error"):
         # FIXME support for version
@@ -162,6 +178,13 @@ def _stdin_hook(kernel_id: str, request_id: str, pending_input: PendingInput, ms
     """Callback on stdin message.
 
     It will register the pending input as temporary answer to the execution request.
+
+    Args:
+        kernel_id: The Kernel ID
+        request_id: The request ID that triggers the input request
+        pending_input: The pending input description.
+            This object will be mutated with useful information from ``msg``.
+        msg: The stdin msg
     """
     get_logger().debug(f"Execution request {kernel_id} received a input request.")
     if PendingInput.request_id is not None:
@@ -184,6 +207,17 @@ async def _execute_snippet(
     metadata: dict | None,
     stdin_hook: t.Callable[[dict], None] | None,
 ) -> dict[str, t.Any]:
+    """Snippet executor
+
+    Args:
+        client: Kernel client
+        ydoc: Jupyter server YDoc extension
+        snippet: The code snippet to execute
+        metadata: The code snippet metadata; e.g. to define the snippet context
+        stdin_hook: The stdin message callback
+    Returns:
+        The execution status and outputs.
+    """
     ycell = None
     if metadata is not None:
         ycell = await _get_ycell(ydoc, metadata)
@@ -201,7 +235,7 @@ async def _execute_snippet(
         client.execute_interactive(
             snippet,
             # FIXME stream partial results
-            output_hook=partial(_output_hook, ycell, outputs),
+            output_hook=partial(_output_hook, outputs, ycell),
             stdin_hook=stdin_hook if client.allow_stdin else None,
         )
     )
@@ -327,21 +361,27 @@ class ExecutionStack:
 
         Args:
             kernel_id : Kernel identifier
+            timeout: Timeout to await for completion in seconds
+
+        Raises:
+            TimeoutError: if a task is not cancelled in time
         """
         # FIXME connect this to kernel lifecycle
         get_logger().debug(f"Cancel execution for kernel {kernel_id}.")
-        worker = self.__workers.pop(kernel_id, None)
-        if worker is not None:
-            worker.cancel()
-            await asyncio.wait_for(worker, timeout=timeout)
-
-        queue = self.__tasks.pop(kernel_id, None)
-        if queue is not None:
-            await asyncio.wait_for(queue.join(), timeout=timeout)
-
-        client = self.__kernel_clients.pop(kernel_id, None)
-        if client is not None:
-            client.stop_channels()
+        try:
+            worker = self.__workers.pop(kernel_id, None)
+            if worker is not None:
+                worker.cancel()
+                await asyncio.wait_for(worker, timeout=timeout)
+        finally:
+            try:
+                queue = self.__tasks.pop(kernel_id, None)
+                if queue is not None:
+                    await asyncio.wait_for(queue.join(), timeout=timeout)
+            finally:
+                client = self.__kernel_clients.pop(kernel_id, None)
+                if client is not None:
+                    client.stop_channels()
 
     async def send_input(self, kernel_id: str, value: str) -> None:
         """Send input ``value`` to the kernel ``kernel_id``.
@@ -431,6 +471,13 @@ class ExecutionStack:
         return uid
 
     def _get_client(self, kernel_id: str) -> jupyter_client.asynchronous.client.AsyncKernelClient:
+        """Get the cached kernel client for ``kernel_id``.
+
+        Args:
+            kernel_id: The kernel ID
+        Returns:
+            The client for the given kernel.
+        """
         if kernel_id not in self.__kernel_clients:
             km = self.__manager.get_kernel(kernel_id)
             self.__kernel_clients[kernel_id] = km.client()

@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: v4.3.0
+_commit: v4.3.4
 _src_path: https://github.com/jupyterlab/extension-template
 author_email: ''
 author_name: Datalayer
@@ -12,3 +12,4 @@ project_short_description: A Jupyter Server extension to execute code cell from 
 python_name: jupyter_server_nbmodel
 repository: https://github.com/datalayer/jupyter-server-nbmodel
 test: true
+

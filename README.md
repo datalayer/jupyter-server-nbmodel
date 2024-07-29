@@ -2,6 +2,7 @@
 
 [![Github Actions Status](https://github.com/datalayer/jupyter-server-nbmodel/workflows/Build/badge.svg)](https://github.com/datalayer/jupyter-server-nbmodel/actions/workflows/build.yml)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/datalayer/jupyter-server-nbmodel/main?urlpath=lab)
+
 A Jupyter Server extension to execute code cell from the server.
 
 This extension is composed of a Python package named `jupyter_server_nbmodel`
@@ -11,7 +12,8 @@ for the frontend extension.
 ## Requirements
 
 - Jupyter Server
-- \[optional\] JupyterLab >= 4.0.0
+- \[recommended\] Real-time collaboration for JupyterLab/Notebook:
+  This will push the kernels results in the notebook from the server.
 
 ## Install
 
@@ -19,6 +21,12 @@ To install the extension, execute:
 
 ```bash
 pip install jupyter_server_nbmodel
+```
+
+Or with recommendations:
+
+```bash
+pip install jupyter_server_nbmodel[rtc]
 ```
 
 ## Uninstall
