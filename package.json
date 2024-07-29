@@ -1,6 +1,6 @@
 {
     "name": "jupyter-server-nbmodel",
-    "version": "0.1.0",
+    "version": "0.1.1-a0",
     "description": "A Jupyter Server extension to execute code cell from the server.",
     "keywords": [
         "jupyter",
