@@ -226,6 +226,7 @@ async def _execute_snippet(
             with ycell.doc.transaction():
                 del ycell["outputs"][:]
                 ycell["execution_count"] = None
+                ycell["execution_state"] = "running"
 
     outputs = []
 
@@ -243,7 +244,9 @@ async def _execute_snippet(
     reply_content = reply["content"]
 
     if ycell is not None:
-        ycell["execution_count"] = reply_content.get("execution_count")
+        with ycell.doc.transaction():
+            ycell["execution_count"] = reply_content.get("execution_count")
+            ycell["execution_state"] = "idle"
 
     return {
         "status": reply_content["status"],
