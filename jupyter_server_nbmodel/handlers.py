@@ -8,6 +8,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from functools import partial
 from http import HTTPStatus
+from datetime import datetime, timezone
 
 import jupyter_server
 import jupyter_server.services
@@ -123,7 +124,6 @@ async def _get_ycell(
         raise KeyError(
             msg,
         )
-
     return ycell
 
 
@@ -219,6 +219,7 @@ async def _execute_snippet(
         The execution status and outputs.
     """
     ycell = None
+    time_info = {}
     if metadata is not None:
         ycell = await _get_ycell(ydoc, metadata)
         if ycell is not None:
@@ -227,7 +228,11 @@ async def _execute_snippet(
                 del ycell["outputs"][:]
                 ycell["execution_count"] = None
                 ycell["execution_state"] = "running"
-
+                if metadata["record_timing"]:
+                    time_info = ycell["metadata"].get("execution",{})
+                    time_info["start_time"] = datetime.now(timezone.utc).isoformat()[:-6]
+                    ycell["metadata"]["execution"] = time_info
+                
     outputs = []
 
     # FIXME we don't check if the session is consistent (aka the kernel is linked to the document)
@@ -247,6 +252,9 @@ async def _execute_snippet(
         with ycell.doc.transaction():
             ycell["execution_count"] = reply_content.get("execution_count")
             ycell["execution_state"] = "idle"
+            if metadata["record_timing"]:
+                time_info["end_time"] = datetime.now(timezone.utc).isoformat()[:-6]
+                ycell["metadata"]["execution"] = time_info
 
     return {
         "status": reply_content["status"],
