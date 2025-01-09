@@ -1,6 +1,9 @@
 import pytest
 
-pytest_plugins = ("pytest_jupyter.jupyter_server","jupyter_server_ydoc.pytest_plugin")
+pytest_plugins = (
+    "pytest_jupyter.jupyter_server",
+    "jupyter_server_ydoc.pytest_plugin"
+ )
 
 
 @pytest.fixture
@@ -19,7 +22,7 @@ def jp_server_config(jp_root_dir,jp_server_config):
                 "db_journal_mode": "OFF",
             },
             "YDocExtension": {"document_save_delay": 1},
-            'IdentityProvider': {'token': ''},
+            "IdentityProvider": {"token": ""},
             "disable_check_xsrf": True,
         },
     }

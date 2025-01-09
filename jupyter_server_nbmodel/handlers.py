@@ -253,11 +253,12 @@ async def _execute_snippet(
             ycell["execution_count"] = reply_content.get("execution_count")
             ycell["execution_state"] = "idle"
             if metadata["record_timing"]:
-                time_info["shell.execute_reply"] = datetime.now(timezone.utc).isoformat()[:-6]
+                end_time = datetime.now(timezone.utc).isoformat()[:-6]
+                if reply_content["status"] == "ok":
+                    time_info["shell.execute_reply"] = end_time
+                else:
+                    time_info["execution_failed"] = end_time
                 ycell["metadata"]["execution"] = time_info
-    if reply_content["status"]!="ok":
-        time_info["execution_state"] = "failed"
-        ycell["metadata"]["execution"] = time_info
     return {
         "status": reply_content["status"],
         "execution_count": reply_content.get("execution_count"),
