@@ -230,7 +230,7 @@ async def _execute_snippet(
                 ycell["execution_state"] = "running"
                 if metadata["record_timing"]:
                     time_info = ycell["metadata"].get("execution",{})
-                    time_info["start_time"] = datetime.now(timezone.utc).isoformat()[:-6]
+                    time_info["shell.execute_reply.started"] = datetime.now(timezone.utc).isoformat()[:-6]
                     ycell["metadata"]["execution"] = time_info
                 
     outputs = []
@@ -253,9 +253,11 @@ async def _execute_snippet(
             ycell["execution_count"] = reply_content.get("execution_count")
             ycell["execution_state"] = "idle"
             if metadata["record_timing"]:
-                time_info["end_time"] = datetime.now(timezone.utc).isoformat()[:-6]
+                time_info["shell.execute_reply"] = datetime.now(timezone.utc).isoformat()[:-6]
                 ycell["metadata"]["execution"] = time_info
-
+    if reply_content["status"]!="ok":
+        time_info["execution_state"] = "failed"
+        ycell["metadata"]["execution"] = time_info
     return {
         "status": reply_content["status"],
         "execution_count": reply_content.get("execution_count"),
@@ -532,9 +534,7 @@ class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
             msg = f"Unknown kernel with id: {kernel_id}"
             get_logger().error(msg)
             raise tornado.web.HTTPError(status_code=HTTPStatus.NOT_FOUND, reason=msg)
-
         uid = self._execution_stack.put(kernel_id, snippet, metadata)
-
         self.set_status(HTTPStatus.ACCEPTED)
         self.set_header("Location", f"/api/kernels/{kernel_id}/requests/{uid}")
         self.finish("{}")
