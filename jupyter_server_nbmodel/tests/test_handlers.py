@@ -200,6 +200,8 @@ async def test_execution_timing_metadata(jp_fetch, pending_kernel_is_ready, rtc_
     assert reply_dt > started_dt, "The reply time is not greater than the started time."
     response2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
     assert response2.code == 204
+    await jp_serverapp.web_app.settings["jupyter_server_ydoc"].stop_extension()
+    del jp_serverapp.web_app.settings["file_id_manager"]
     await asyncio.sleep(1)
 
 @pytest.mark.timeout(TEST_TIMEOUT)
