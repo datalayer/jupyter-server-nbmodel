@@ -228,11 +228,11 @@ async def _execute_snippet(
                 del ycell["outputs"][:]
                 ycell["execution_count"] = None
                 ycell["execution_state"] = "running"
-                if metadata["record_timing"]:
-                    time_info = ycell["metadata"].get("execution",{})
+                if metadata.get("record_timing", False):
+                    time_info = ycell["metadata"].get("execution", {})
                     time_info["shell.execute_reply.started"] = datetime.now(timezone.utc).isoformat()[:-6]
                     ycell["metadata"]["execution"] = time_info
-                
+
     outputs = []
 
     # FIXME we don't check if the session is consistent (aka the kernel is linked to the document)
@@ -252,7 +252,7 @@ async def _execute_snippet(
         with ycell.doc.transaction():
             ycell["execution_count"] = reply_content.get("execution_count")
             ycell["execution_state"] = "idle"
-            if metadata["record_timing"]:
+            if metadata and metadata.get("record_timing", False):
                 end_time = datetime.now(timezone.utc).isoformat()[:-6]
                 if reply_content["status"] == "ok":
                     time_info["shell.execute_reply"] = end_time

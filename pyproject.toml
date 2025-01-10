@@ -81,10 +81,14 @@ build_dir = "jupyter_server_nbmodel/labextension"
 [tool.pytest.ini_options]
 filterwarnings = [
   "error",
+  "ignore:Unclosed context <zmq.asyncio.Context:ResourceWarning",
+  "ignore:Unclosed socket <zmq.asyncio.Socket:ResourceWarning",
   "ignore:There is no current event loop:DeprecationWarning",
   "module:make_current is deprecated:DeprecationWarning",
   "module:clear_current is deprecated:DeprecationWarning",
   "module:Jupyter is migrating its paths to use standard platformdirs:DeprecationWarning",
+  # From anyio https://github.com/agronholm/anyio/pull/715
+  "ignore:Unclosed <MemoryObjectSendStream:ResourceWarning",
 ]
 
 [tool.mypy]
