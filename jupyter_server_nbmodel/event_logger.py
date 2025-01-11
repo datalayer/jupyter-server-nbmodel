@@ -1,8 +1,8 @@
 from jupyter_events import EventLogger
 import pathlib
 
-JUPYTER_SERVER_EVENTS_URI = "https://events.jupyter.org/jupyter_server_nbmodel"
-DEFAULT_EVENTS_SCHEMA_PATH = pathlib.Path(__file__).parent / "event_schemas"
+_JUPYTER_SERVER_EVENTS_URI = "https://events.jupyter.org/jupyter_server_nbmodel"
+_DEFAULT_EVENTS_SCHEMA_PATH = pathlib.Path(__file__).parent / "event_schemas"
 
 class _EventLogger:
     _event_logger = None
@@ -16,8 +16,8 @@ class _EventLogger:
                 "https://events.jupyter.org/jupyter_server_nbmodel/cell_execution/v1",
             ]
             for schema_id in schema_ids:
-                rel_schema_path = schema_id.replace(JUPYTER_SERVER_EVENTS_URI + "/", "") + ".yaml"
-                schema_path = DEFAULT_EVENTS_SCHEMA_PATH / rel_schema_path
+                rel_schema_path = schema_id.replace(_JUPYTER_SERVER_EVENTS_URI + "/", "") + ".yaml"
+                schema_path = _DEFAULT_EVENTS_SCHEMA_PATH / rel_schema_path
                 cls._event_logger.register_event_schema(schema_path)
         return cls._event_logger
 
