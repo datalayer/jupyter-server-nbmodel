@@ -241,6 +241,16 @@ async def _execute_snippet(
                     time_info = ycell["metadata"].get("execution", {})
                     time_info["shell.execute_reply.started"] = datetime.now(timezone.utc).isoformat()[:-6]
                     ycell["metadata"]["execution"] = time_info
+            # Emit cell execution start event
+            event_logger.emit(
+                schema_id="https://events.jupyter.org/jupyter_server_nbmodel/cell_execution/v1",
+                data={
+                    "event_type": "execution_start",
+                    "cell_id": metadata["cell_id"],
+                    "document_id": metadata["document_id"],
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            )
     outputs = []
 
     # FIXME we don't check if the session is consistent (aka the kernel is linked to the document)
