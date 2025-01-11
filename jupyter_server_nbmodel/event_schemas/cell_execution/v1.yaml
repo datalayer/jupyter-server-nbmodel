@@ -1,0 +1,42 @@
+"$id": https://events.jupyter.org/jupyter_server_nbmodel/cell_execution/v1
+version: "1"
+title: Cell Execution activities
+personal-data: true
+description: |
+  Record events of a cell execution.
+type: object
+required:
+  - event_type
+  - cell_id
+  - document_id
+  - timestamp
+properties:
+  event_type:
+    enum:
+      - execution_start
+      - execution_end
+
+  cell_id:
+    type: string
+    description: |
+      Cell id.
+
+  document_id:
+    type: string
+    description: |
+      Document id.
+
+  success:
+    type: boolean
+    description: |
+      Whether the cell execution was successful or not.
+
+  kernel_error:
+    type: string
+    description: |
+      Error message from the kernel.
+    
+  timestamp:
+    type: string
+    description: |
+      Timestamp of the event in ISO format.

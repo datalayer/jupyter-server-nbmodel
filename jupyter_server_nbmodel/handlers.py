@@ -19,8 +19,10 @@ import tornado
 from jupyter_core.utils import ensure_async
 from jupyter_server.base.handlers import APIHandler
 from jupyter_server.extension.handler import ExtensionHandlerMixin
+from jupyter_events import EventLogger
 
 from .log import get_logger
+from .event_logger import event_logger
 
 if t.TYPE_CHECKING:
     import jupyter_client
@@ -199,6 +201,13 @@ def _stdin_hook(kernel_id: str, request_id: str, pending_input: PendingInput, ms
         parent_header=header, input_request=InputRequest(**msg["content"])
     )
 
+def _get_error(outputs):
+    return "\n".join(
+        f"{output['ename']}: {output['evalue']}"
+        for output in outputs
+        if output.get("output_type") == "error"
+    )
+
 
 async def _execute_snippet(
     client: jupyter_client.asynchronous.client.AsyncKernelClient,
@@ -232,7 +241,6 @@ async def _execute_snippet(
                     time_info = ycell["metadata"].get("execution", {})
                     time_info["shell.execute_reply.started"] = datetime.now(timezone.utc).isoformat()[:-6]
                     ycell["metadata"]["execution"] = time_info
-
     outputs = []
 
     # FIXME we don't check if the session is consistent (aka the kernel is linked to the document)
@@ -259,6 +267,18 @@ async def _execute_snippet(
                 else:
                     time_info["execution_failed"] = end_time
                 ycell["metadata"]["execution"] = time_info
+        # Emit cell execution end event
+        event_logger.emit(
+            schema_id="https://events.jupyter.org/jupyter_server_nbmodel/cell_execution/v1",
+            data={
+                "event_type": "execution_end",
+                "cell_id": metadata["cell_id"],
+                "document_id": metadata["document_id"],
+                "success": reply_content["status"]=="ok",
+                "kernel_error": _get_error(outputs),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        )
     return {
         "status": reply_content["status"],
         "execution_count": reply_content.get("execution_count"),
