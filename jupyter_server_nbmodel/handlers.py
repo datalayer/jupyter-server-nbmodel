@@ -232,6 +232,7 @@ async def _execute_snippet(
     if metadata is not None:
         ycell = await _get_ycell(ydoc, metadata)
         if ycell is not None:
+            execution_start_time = datetime.now(timezone.utc).isoformat()[:-6]
             # Reset cell
             with ycell.doc.transaction():
                 del ycell["outputs"][:]
@@ -239,7 +240,7 @@ async def _execute_snippet(
                 ycell["execution_state"] = "running"
                 if metadata.get("record_timing", False):
                     time_info = ycell["metadata"].get("execution", {})
-                    time_info["shell.execute_reply.started"] = datetime.now(timezone.utc).isoformat()[:-6]
+                    time_info["shell.execute_reply.started"] = execution_start_time
                     ycell["metadata"]["execution"] = time_info
             # Emit cell execution start event
             event_logger.emit(
@@ -248,7 +249,7 @@ async def _execute_snippet(
                     "event_type": "execution_start",
                     "cell_id": metadata["cell_id"],
                     "document_id": metadata["document_id"],
-                    "timestamp": datetime.now(timezone.utc).isoformat()
+                    "timestamp": execution_start_time
                 }
             )
     outputs = []
@@ -267,15 +268,15 @@ async def _execute_snippet(
     reply_content = reply["content"]
 
     if ycell is not None:
+        execution_end_time = datetime.now(timezone.utc).isoformat()[:-6]
         with ycell.doc.transaction():
             ycell["execution_count"] = reply_content.get("execution_count")
             ycell["execution_state"] = "idle"
             if metadata and metadata.get("record_timing", False):
-                end_time = datetime.now(timezone.utc).isoformat()[:-6]
                 if reply_content["status"] == "ok":
-                    time_info["shell.execute_reply"] = end_time
+                    time_info["shell.execute_reply"] = execution_end_time
                 else:
-                    time_info["execution_failed"] = end_time
+                    time_info["execution_failed"] = execution_end_time
                 ycell["metadata"]["execution"] = time_info
         # Emit cell execution end event
         event_logger.emit(
@@ -286,7 +287,7 @@ async def _execute_snippet(
                 "document_id": metadata["document_id"],
                 "success": reply_content["status"]=="ok",
                 "kernel_error": _get_error(outputs),
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": execution_end_time
             }
         )
     return {

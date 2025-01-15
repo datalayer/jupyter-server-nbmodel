@@ -56,5 +56,4 @@ class Extension(ExtensionApp):
     async def stop_extension(self):
         if hasattr(self, "__execution_stack"):
             get_logger().info("Disposing the execution stack…")
-            await self.__execution_stack.dispose()
             await asyncio.wait_for(self.__execution_stack.dispose(), timeout=3)
