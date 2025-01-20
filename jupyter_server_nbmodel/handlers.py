@@ -243,6 +243,8 @@ async def _execute_snippet(
                 if metadata.get("record_timing", False):
                     time_info = ycell["metadata"].get("execution", {})
                     time_info["shell.execute_reply.started"] = execution_start_time
+                    # for compatibility with jupyterlab-execute-time also set:
+                    time_info["iopub.execute_input"] = execution_start_time
                     ycell["metadata"]["execution"] = time_info
             # Emit cell execution start event
             event_logger.emit(
