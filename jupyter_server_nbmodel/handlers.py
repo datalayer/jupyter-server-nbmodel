@@ -238,6 +238,8 @@ async def _execute_snippet(
                 del ycell["outputs"][:]
                 ycell["execution_count"] = None
                 ycell["execution_state"] = "running"
+                if "execution" in ycell["metadata"]:
+                    del ycell["metadata"]["execution"]
                 if metadata.get("record_timing", False):
                     time_info = ycell["metadata"].get("execution", {})
                     time_info["shell.execute_reply.started"] = execution_start_time
