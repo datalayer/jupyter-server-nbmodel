@@ -108,12 +108,17 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
           const code = cell.model.sharedModel.getSource();
           const cellId = cell.model.sharedModel.getId();
           const documentId = notebook.sharedModel.getState('document_id');
+          const { recordTiming } = notebookConfig;
 
           const init = {
             method: 'POST',
             body: JSON.stringify({
               code,
-              metadata: { cell_id: cellId, document_id: documentId }
+              metadata: {
+                cell_id: cellId,
+                document_id: documentId,
+                record_timing: recordTiming
+              }
             })
           };
           onCellExecutionScheduled({ cell });

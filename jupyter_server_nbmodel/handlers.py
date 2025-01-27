@@ -8,6 +8,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from functools import partial
 from http import HTTPStatus
+from datetime import datetime, timezone
 
 import jupyter_server
 import jupyter_server.services
@@ -18,8 +19,10 @@ import tornado
 from jupyter_core.utils import ensure_async
 from jupyter_server.base.handlers import APIHandler
 from jupyter_server.extension.handler import ExtensionHandlerMixin
+from jupyter_events import EventLogger
 
 from .log import get_logger
+from .event_logger import event_logger
 
 if t.TYPE_CHECKING:
     import jupyter_client
@@ -123,7 +126,6 @@ async def _get_ycell(
         raise KeyError(
             msg,
         )
-
     return ycell
 
 
@@ -199,6 +201,13 @@ def _stdin_hook(kernel_id: str, request_id: str, pending_input: PendingInput, ms
         parent_header=header, input_request=InputRequest(**msg["content"])
     )
 
+def _get_error(outputs):
+    return "\n".join(
+        f"{output['ename']}: {output['evalue']}"
+        for output in outputs
+        if output.get("output_type") == "error"
+    )
+
 
 async def _execute_snippet(
     client: jupyter_client.asynchronous.client.AsyncKernelClient,
@@ -219,15 +228,34 @@ async def _execute_snippet(
         The execution status and outputs.
     """
     ycell = None
+    time_info = {}
     if metadata is not None:
         ycell = await _get_ycell(ydoc, metadata)
         if ycell is not None:
+            execution_start_time = datetime.now(timezone.utc).isoformat()[:-6]
             # Reset cell
             with ycell.doc.transaction():
                 del ycell["outputs"][:]
                 ycell["execution_count"] = None
                 ycell["execution_state"] = "running"
-
+                if "execution" in ycell["metadata"]:
+                    del ycell["metadata"]["execution"]
+                if metadata.get("record_timing", False):
+                    time_info = ycell["metadata"].get("execution", {})
+                    time_info["shell.execute_reply.started"] = execution_start_time
+                    # for compatibility with jupyterlab-execute-time also set:
+                    time_info["iopub.execute_input"] = execution_start_time
+                    ycell["metadata"]["execution"] = time_info
+            # Emit cell execution start event
+            event_logger.emit(
+                schema_id="https://events.jupyter.org/jupyter_server_nbmodel/cell_execution/v1",
+                data={
+                    "event_type": "execution_start",
+                    "cell_id": metadata["cell_id"],
+                    "document_id": metadata["document_id"],
+                    "timestamp": execution_start_time
+                }
+            )
     outputs = []
 
     # FIXME we don't check if the session is consistent (aka the kernel is linked to the document)
@@ -244,10 +272,28 @@ async def _execute_snippet(
     reply_content = reply["content"]
 
     if ycell is not None:
+        execution_end_time = datetime.now(timezone.utc).isoformat()[:-6]
         with ycell.doc.transaction():
             ycell["execution_count"] = reply_content.get("execution_count")
             ycell["execution_state"] = "idle"
-
+            if metadata and metadata.get("record_timing", False):
+                if reply_content["status"] == "ok":
+                    time_info["shell.execute_reply"] = execution_end_time
+                else:
+                    time_info["execution_failed"] = execution_end_time
+                ycell["metadata"]["execution"] = time_info
+        # Emit cell execution end event
+        event_logger.emit(
+            schema_id="https://events.jupyter.org/jupyter_server_nbmodel/cell_execution/v1",
+            data={
+                "event_type": "execution_end",
+                "cell_id": metadata["cell_id"],
+                "document_id": metadata["document_id"],
+                "success": reply_content["status"]=="ok",
+                "kernel_error": _get_error(outputs),
+                "timestamp": execution_end_time
+            }
+        )
     return {
         "status": reply_content["status"],
         "execution_count": reply_content.get("execution_count"),
@@ -524,9 +570,7 @@ class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
             msg = f"Unknown kernel with id: {kernel_id}"
             get_logger().error(msg)
             raise tornado.web.HTTPError(status_code=HTTPStatus.NOT_FOUND, reason=msg)
-
         uid = self._execution_stack.put(kernel_id, snippet, metadata)
-
         self.set_status(HTTPStatus.ACCEPTED)
         self.set_header("Location", f"/api/kernels/{kernel_id}/requests/{uid}")
         self.finish("{}")

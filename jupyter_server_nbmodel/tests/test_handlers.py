@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import json
 import re
+import nbformat
 
 import pytest
 from jupyter_client.kernelspec import NATIVE_KERNEL_NAME
@@ -146,6 +147,67 @@ async def test_post_erroneous_execute(jp_fetch, pending_kernel_is_ready, snippet
     response2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
     assert response2.code == 204
 
+    await asyncio.sleep(1)
+
+
+@pytest.mark.timeout(TEST_TIMEOUT)
+async def test_execution_timing_metadata(jp_root_dir, jp_fetch, pending_kernel_is_ready, rtc_create_notebook, jp_serverapp):
+    snippet = "a = 1"
+    nb = nbformat.v4.new_notebook(
+        cells=[nbformat.v4.new_code_cell(source=snippet, execution_count=1)]
+    )
+    nb_content = nbformat.writes(nb, version=4)
+    path, _ = await rtc_create_notebook("test.ipynb", nb_content, store=True)
+    collaboration = jp_serverapp.web_app.settings["jupyter_server_ydoc"]
+    fim = jp_serverapp.web_app.settings["file_id_manager"]
+    document_id = f'json:notebook:{fim.get_id("test.ipynb")}'
+    cell_id = nb["cells"][0].get("id")
+
+    r = await jp_fetch(
+        "api", "kernels", method="POST", body=json.dumps({"name": NATIVE_KERNEL_NAME})
+    )
+    kernel = json.loads(r.body.decode())
+    await pending_kernel_is_ready(kernel["id"])
+
+    response = await wait_for_request(
+        jp_fetch,
+        "api",
+        "kernels",
+        kernel["id"],
+        "execute",
+        method="POST",
+        body=json.dumps({
+            "code": snippet,
+            "metadata": {
+                "cell_id": cell_id,
+                "document_id": document_id,
+                "record_timing": True
+            }
+        }),
+    )
+    assert response.code == 200
+
+    document = await collaboration.get_document(
+        path=path, content_type="notebook", file_format="json", copy=False
+    )
+    cell_data = document.get()["cells"][0]
+    assert 'execution' in cell_data['metadata'], "'execution' does not exist in 'metadata'"
+
+    # Assert that start and end time exist in 'execution'
+    execution = cell_data['metadata']['execution']
+    assert 'shell.execute_reply.started' in execution, "'shell.execute_reply.started' does not exist in 'execution'"
+    assert 'shell.execute_reply' in execution, "'shell.execute_reply' does not exist in 'execution'"
+
+    started_time = execution['shell.execute_reply.started']
+    reply_time = execution['shell.execute_reply']
+
+    started_dt = datetime.datetime.fromisoformat(started_time)
+    reply_dt = datetime.datetime.fromisoformat(reply_time)
+
+    # Assert that reply_time is greater than started_time
+    assert reply_dt > started_dt, "The reply time is not greater than the started time."
+    response2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
+    assert response2.code == 204
     await asyncio.sleep(1)
 
 
