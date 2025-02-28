@@ -2,6 +2,23 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.1.1a2
+
+([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/v0.1.1a1...5f76b6cea5278d4ac6648a107c76ef75bc3d9502))
+
+### Enhancements made
+
+- Add execution start and end time metadata for code cells [#29](https://github.com/datalayer/jupyter-server-nbmodel/pull/29) ([@Darshan808](https://github.com/Darshan808))
+- Set `execution_state` when executing a cell [#25](https://github.com/datalayer/jupyter-server-nbmodel/pull/25) ([@krassowski](https://github.com/krassowski))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2024-07-29&to=2025-02-28&type=c))
+
+[@Darshan808](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3ADarshan808+updated%3A2024-07-29..2025-02-28&type=Issues) | [@github-actions](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Agithub-actions+updated%3A2024-07-29..2025-02-28&type=Issues) | [@krassowski](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Akrassowski+updated%3A2024-07-29..2025-02-28&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.1.1a1
 
 ([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/bf5719ce10580303de08342073b66e3d579e7cdc...2facfb378e11f8f564593f4329af5c71d7fa67f2))
@@ -33,5 +50,3 @@
 ([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2024-05-06&to=2024-07-29&type=c))
 
 [@dependabot](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Adependabot+updated%3A2024-05-06..2024-07-29&type=Issues) | [@fcollonval](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Afcollonval+updated%3A2024-05-06..2024-07-29&type=Issues) | [@github-actions](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Agithub-actions+updated%3A2024-05-06..2024-07-29&type=Issues) | [@krassowski](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Akrassowski+updated%3A2024-05-06..2024-07-29&type=Issues) | [@Wh1isper](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3AWh1isper+updated%3A2024-05-06..2024-07-29&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
