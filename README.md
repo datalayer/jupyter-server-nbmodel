@@ -29,12 +29,6 @@ For API-only use:
 pip install jupyter_server_nbmodel
 ```
 
-Or with recommendations:
-
-```bash
-pip install jupyter_server_nbmodel[rtc]
-```
-
 ## Uninstall
 
 To remove the extension, execute:
