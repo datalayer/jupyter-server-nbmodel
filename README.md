@@ -238,19 +238,29 @@ More information are provided within the [ui-tests](./ui-tests/README.md) README
 
 ```bash
 # Terminal 1.
+# You can also invoke `make jupyter-server`
 jupyter server --port 8888 --autoreload --ServerApp.disable_check_xsrf=True --IdentityProvider.token= --ServerApp.port_retries=0
+```
 
+```bash
 # Terminal 2.
 KERNEL=$(curl -X POST http://localhost:8888/api/kernels)
 echo $KERNEL
+
 KERNEL_ID=$(echo $KERNEL | jq --raw-output '.id')
 echo $KERNEL_ID
-REQUEST=$(curl --include http://localhost:8888/api/kernels/$KERNEL_ID/execute -d "{ \"code\": \"print('1+1')\" }")
-RESULT=$(echo $REQUEST | grep -i ^Location: | cut -d' ' -f2 | tr -d '\r')
-echo $RESULT
 
-curl http://localhost:8888$RESULT
-{"status": "ok", "execution_count": 1, "outputs": "[{\"output_type\": \"stream\", \"name\": \"stdout\", \"text\": \"1+1\\n\"}]"}
+RESPONSE=$(curl --include http://localhost:8888/api/kernels/$KERNEL_ID/execute -d "{ \"code\": \"print('1+1')\" }")
+echo $RESPONSE
+
+RESULT_PATH=$(echo $RESPONSE | grep -oP 'Location:\s*\K[^ ]+' | tr -d '\r\n')
+echo $RESULT_PATH
+
+URL="http://localhost:8888${RESULT_PATH}"
+echo $URL
+
+curl "$URL"
+# {"status": "ok", "execution_count": 1, "outputs": "[{\"output_type\": \"stream\", \"name\": \"stdout\", \"text\": \"1+1\\n\"}]"}
 ```
 
 ### Running Tests

@@ -52,8 +52,8 @@ artifacts = ["jupyter_server_nbmodel/labextension"]
 exclude = [".github", "binder"]
 
 [tool.hatch.build.targets.wheel.shared-data]
-"jupyter_server_nbmodel/labextension" = "share/jupyter/labextensions/jupyter-server-nbmodel"
-"install.json" = "share/jupyter/labextensions/jupyter-server-nbmodel/install.json"
+"jupyter_server_nbmodel/labextension" = "share/jupyter/labextensions/@datalayer/jupyter-server-nbmodel"
+"install.json" = "share/jupyter/labextensions/@datalayer/jupyter-server-nbmodel/install.json"
 "jupyter-config/server-config" = "etc/jupyter/jupyter_server_config.d"
 
 [tool.hatch.build.hooks.version]
