@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2025 Datalayer, Inc.
+# Distributed under the terms of the Modified BSD License.
+
 "$id": https://events.jupyter.org/jupyter_server_nbmodel/cell_execution/v1
 version: "1"
 title: Cell Execution activities
@@ -15,27 +18,22 @@ properties:
     enum:
       - execution_start
       - execution_end
-
   cell_id:
     type: string
     description: |
       Cell id.
-
   document_id:
     type: string
     description: |
       Document id.
-
   success:
     type: boolean
     description: |
       Whether the cell execution was successful or not.
-
   kernel_error:
     type: string
     description: |
       Error message from the kernel.
-    
   timestamp:
     type: string
     description: |
