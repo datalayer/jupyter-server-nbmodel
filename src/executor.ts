@@ -5,9 +5,9 @@
  */
 
 import { Dialog, showDialog } from '@jupyterlab/apputils';
+import { URLExt } from '@jupyterlab/coreutils';
 import { CodeCell } from '@jupyterlab/cells';
 import type { ICodeCellModel, MarkdownCell } from '@jupyterlab/cells';
-import { URLExt } from '@jupyterlab/coreutils';
 import { INotebookCellExecutor } from '@jupyterlab/notebook';
 import { ServerConnection } from '@jupyterlab/services';
 import { nullTranslator } from '@jupyterlab/translation';
@@ -47,7 +47,6 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
   }: INotebookCellExecutor.IRunCellOptions): Promise<boolean> {
     translator = translator ?? nullTranslator;
     const trans = translator.load('jupyterlab');
-
     switch (cell.model.type) {
       case 'markdown':
         (cell as MarkdownCell).rendered = true;
@@ -83,14 +82,12 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
               await sessionDialogs.selectKernel(sessionContext);
             }
           }
-
           if (sessionContext.hasNoKernel) {
             cell.model.sharedModel.transact(() => {
               (cell.model as ICodeCellModel).clearExecution();
             });
             return true;
           }
-
           const kernelId = sessionContext?.session?.kernel?.id;
           const executeApiURL = URLExt.join(
             this._serverSettings.baseUrl,
@@ -100,7 +97,6 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
           const cellId = cell.model.sharedModel.getId();
           const documentId = notebook.sharedModel.getState('document_id');
           const { recordTiming } = notebookConfig;
-
           const init = {
             method: 'POST',
             body: JSON.stringify({
@@ -115,7 +111,7 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
           onCellExecutionScheduled({ cell });
           let success = false;
           try {
-            // FIXME quid of deletedCells and timing record
+            // FIXME quid of deletedCells and timing record.
             const response = await requestServer(
               cell as CodeCell,
               executeApiURL,
@@ -136,9 +132,7 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
               throw error;
             }
           }
-
           onCellExecuted({ cell, success });
-
           return true;
         }
         cell.model.sharedModel.transact(() => {
