@@ -1,7 +1,14 @@
-# jupyter_server_nbmodel
+
+[![Datalayer](https://assets.datalayer.tech/datalayer-25.svg)](https://datalayer.io)
+
+[![Become a Sponsor](https://img.shields.io/static/v1?label=Become%20a%20Sponsor&message=%E2%9D%A4&logo=GitHub&style=flat&color=1ABC9C)](https://github.com/sponsors/datalayer)
+
+# 🪐 Jupyter Server NbModel
 
 [![Github Actions Status](https://github.com/datalayer/jupyter-server-nbmodel/workflows/Build/badge.svg)](https://github.com/datalayer/jupyter-server-nbmodel/actions/workflows/build.yml)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/datalayer/jupyter-server-nbmodel/main?urlpath=lab)
+
+> Stop session timeouts and lost.
 
 A Jupyter Server extension to execute code cell from the server.
 
@@ -12,7 +19,7 @@ for the frontend extension.
 ## Requirements
 
 - Jupyter Server
-- \[recommended\] Real-time collaboration for JupyterLab/Notebook:
+- \[RECOMMENDED\] Real-time collaboration for JupyterLab/Notebook:
   This will push the kernels results in the notebook from the server.
 
 ## Install

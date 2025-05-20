@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2025 Datalayer, Inc.
+# Distributed under the terms of the Modified BSD License.
+
 import asyncio
 import datetime
 import json
@@ -8,6 +11,7 @@ import pytest
 from jupyter_client.kernelspec import NATIVE_KERNEL_NAME
 
 TEST_TIMEOUT = 15
+
 SLEEP = 0.25
 
 

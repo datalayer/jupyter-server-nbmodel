@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2025 Datalayer, Inc.
+# Distributed under the terms of the Modified BSD License.
+
 try:
     from ._version import __version__
 except ImportError:

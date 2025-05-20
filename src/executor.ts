@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2024-2025 Datalayer, Inc.
+ *
+ * Distributed under the terms of the Modified BSD License.
+ */
+
 import {
   JupyterFrontEnd,
   JupyterFrontEndPlugin
