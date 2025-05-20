@@ -5,7 +5,9 @@ from jupyter_events import EventLogger
 import pathlib
 
 _JUPYTER_SERVER_EVENTS_URI = "https://events.jupyter.org/jupyter_server_nbmodel"
+
 _DEFAULT_EVENTS_SCHEMA_PATH = pathlib.Path(__file__).parent / "event_schemas"
+
 
 class _EventLogger:
     _event_logger = None

@@ -11,11 +11,12 @@ from jupyter_server.services.kernels.handlers import _kernel_id_regex
 from .handlers import ExecuteHandler, ExecutionStack, InputHandler, RequestHandler
 from .log import get_logger
 
+
 RTC_EXTENSIONAPP_NAME = "jupyter_server_ydoc"
 
 STOP_TIMEOUT = 3
 
-_request_id_regex = r"(?P<request_id>\w+-\w+-\w+-\w+-\w+)"
+REQUEST_ID_REGEX = r"(?P<request_id>\w+-\w+-\w+-\w+-\w+)"
 
 
 class Extension(ExtensionApp):
@@ -49,7 +50,7 @@ class Extension(ExtensionApp):
                     {"execution_stack": self.__execution_stack},
                 ),
                 (
-                    f"/api/kernels/{_kernel_id_regex}/requests/{_request_id_regex}",
+                    f"/api/kernels/{_kernel_id_regex}/requests/{REQUEST_ID_REGEX}",
                     RequestHandler,
                     {"execution_stack": self.__execution_stack},
                 ),

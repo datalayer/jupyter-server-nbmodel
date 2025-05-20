@@ -4,6 +4,6 @@
  * Distributed under the terms of the Modified BSD License.
  */
 
-import { notebookCellExecutor } from './executor';
+import { notebookCellExecutor } from './plugin';
 
 export default notebookCellExecutor;

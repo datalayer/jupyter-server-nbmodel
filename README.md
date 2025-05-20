@@ -10,10 +10,10 @@
 
 > Stop session timeouts and lost.
 
-A Jupyter Server extension to execute code cell from the server.
+A Jupyter Server extension to execute code from the server-side NbModel.
 
 This extension is composed of a Python package named `jupyter_server_nbmodel`
-for the server extension and a NPM package named `jupyter-server-nbmodel`
+for the server extension and a NPM package named `@datalayer/jupyter-server-nbmodel`
 for the frontend extension.
 
 ## Requirements
