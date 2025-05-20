@@ -5,6 +5,7 @@ header:
     copyright-year: 2024-2025
     content: |
       Copyright (c) [year] [owner]
+      
       Distributed under the terms of the Modified BSD License.
 
   paths-ignore:
