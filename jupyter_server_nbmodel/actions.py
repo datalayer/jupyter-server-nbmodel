@@ -37,7 +37,7 @@ if t.TYPE_CHECKING:
         ...
 
 
-# FIXME should we use caching to retrieve faster at least the document
+# FIXME should we use caching to retrieve faster at least the document.
 async def _get_ycell(
     ydoc: jupyter_server_ydoc.app.YDocExtension | None,
     metadata: dict | None,
@@ -54,26 +54,20 @@ async def _get_ycell(
         msg = "jupyter-collaboration extension is not installed on the server. Outputs won't be written within the document."  # noqa: E501
         get_logger().warning(msg)
         return None
-
     document_id = metadata.get("document_id")
     cell_id = metadata.get("cell_id")
-
     if document_id is None or cell_id is None:
         msg = (
             "document_id and cell_id not defined. The outputs won't be written within the document."
         )
         get_logger().debug(msg)
         return None
-
     notebook: YNotebook | None = await ydoc.get_document(room_id=document_id, copy=False)
-
     if notebook is None:
         msg = f"Document with ID {document_id} not found."
         get_logger().warning(msg)
         return None
-
     ycells = filter(lambda c: c["id"] == cell_id, notebook.ycells)
-
     ycell = next(ycells, None)
     if ycell is None:
         msg = f"Cell with ID {cell_id} not found in document {document_id}."
@@ -83,7 +77,6 @@ async def _get_ycell(
         # Check if there is more than one cell
         if next(ycells, None) is not None:
             get_logger().warning("Multiple cells have the same ID '%s'.", cell_id)
-
     if ycell["cell_type"] != "code":
         msg = f"Cell with ID {cell_id} of document {document_id} is not of type code."
         get_logger().error(msg)
@@ -106,17 +99,14 @@ def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) ->
         # FIXME support for version
         output = nbformat.v4.output_from_msg(msg)
         outputs.append(output)
-
         if ycell is not None:
             cell_outputs = ycell["outputs"]
             if msg_type == "stream":
                 with cell_outputs.doc.transaction():
                     text = output["text"]
-
                     # FIXME Logic is quite complex at https://github.com/jupyterlab/jupyterlab/blob/7ae2d436fc410b0cff51042a3350ba71f54f4445/packages/outputarea/src/model.ts#L518
                     if text.endswith((os.linesep, "\n")):
                         text = text[:-1]
-
                     if (not cell_outputs) or (cell_outputs[-1]["name"] != output["name"]):
                         output["text"] = [text]
                         cell_outputs.append(output)
@@ -127,14 +117,11 @@ def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) ->
             else:
                 with cell_outputs.doc.transaction():
                     cell_outputs.append(output)
-
     elif msg_type == "clear_output":
         # FIXME msg.content.wait - if true should clear at the next message
         outputs.clear()
-
         if ycell is not None:
             del ycell["outputs"][:]
-
     elif msg_type == "update_display_data":
         # FIXME
         ...
@@ -157,7 +144,6 @@ def _stdin_hook(kernel_id: str, request_id: str, pending_input: PendingInput, ms
         get_logger().error(
             f"Execution request {kernel_id} received a input request while waiting for an input.\n{msg}"  # noqa: E501
         )
-
     header = msg["header"].copy()
     header["date"] = header["date"].isoformat()
     pending_input.request_id = request_id
@@ -222,7 +208,6 @@ async def _execute_snippet(
                 }
             )
     outputs = []
-
     # FIXME we don't check if the session is consistent (aka the kernel is linked to the document)
     #   - should we?
     reply = await ensure_async(
@@ -233,9 +218,7 @@ async def _execute_snippet(
             stdin_hook=stdin_hook if client.allow_stdin else None,
         )
     )
-
     reply_content = reply["content"]
-
     if ycell is not None:
         execution_end_time = datetime.now(timezone.utc).isoformat()[:-6]
         with ycell.doc.transaction():
@@ -289,7 +272,6 @@ async def kernel_worker(
             results[uid] = await _execute_snippet(
                 client, ydoc, snippet, metadata, partial(_stdin_hook, kernel_id, uid, pending_input)
             )
-
             queue.task_done()
             get_logger().debug(f"Execution request {uid} processed for kernel {kernel_id}.")
         except (asyncio.CancelledError, KeyboardInterrupt, RuntimeError) as e:
@@ -307,6 +289,5 @@ async def kernel_worker(
             )
             if not queue.empty():
                 queue.task_done()
-
     if to_raise is not None:
         raise to_raise
