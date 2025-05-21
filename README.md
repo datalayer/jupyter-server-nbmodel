@@ -12,6 +12,12 @@
 
 A Jupyter Server extension to execute code from the server-side NbModel.
 
+<p align="center">
+  <img src="https://assets.datalayer.tech/jupyter-server-nbmodel/nbmodel.gif" alt="Jupyter Server NbModel Demo" width="800"/>
+  <br>
+  <em>Side-by-side comparison: Without jupyter_server_nbmodel (left), notebook execution stops when reloading the page; with jupyter_server_nbmodel (right), execution continues uninterrupted even after reload.</em>
+</p>
+
 This extension is composed of a Python package named `jupyter_server_nbmodel`
 for the server extension and a NPM package named `@datalayer/jupyter-server-nbmodel`
 for the frontend extension.
@@ -27,7 +33,7 @@ for the frontend extension.
 To install the extension for use in JupyterLab or Notebook 7, execute:
 
 ```bash
-pip install jupyter_server_nbmodel[lab]
+pip install "jupyter_server_nbmodel[lab]"
 ```
 
 For API-only use:
