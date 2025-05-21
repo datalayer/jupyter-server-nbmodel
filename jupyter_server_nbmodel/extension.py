@@ -1,3 +1,7 @@
+# Copyright (c) 2024-2025 Datalayer, Inc.
+#
+# Distributed under the terms of the Modified BSD License.
+
 from __future__ import annotations
 
 import asyncio
@@ -5,18 +9,26 @@ import asyncio
 from jupyter_server.extension.application import ExtensionApp
 from jupyter_server.services.kernels.handlers import _kernel_id_regex
 
-from .handlers import ExecuteHandler, ExecutionStack, InputHandler, RequestHandler
-from .log import get_logger
+from jupyter_server_nbmodel.execution_stack import ExecutionStack
+from jupyter_server_nbmodel.handlers import (
+    ExecuteHandler,
+    InputHandler,
+    RequestHandler,
+)
+from jupyter_server_nbmodel.log import get_logger
+
 
 RTC_EXTENSIONAPP_NAME = "jupyter_server_ydoc"
 
 STOP_TIMEOUT = 3
 
-_request_id_regex = r"(?P<request_id>\w+-\w+-\w+-\w+-\w+)"
+REQUEST_ID_REGEX = r"(?P<request_id>\w+-\w+-\w+-\w+-\w+)"
 
 
 class Extension(ExtensionApp):
+
     name = "jupyter_server_nbmodel"
+
 
     def initialize_handlers(self):
         rtc_extension = None
@@ -28,11 +40,10 @@ class Extension(ExtensionApp):
             if n_extensions > 1:
                 get_logger().warning("%i collaboration extensions found.", n_extensions)
             rtc_extension = next(iter(rtc_extensions))
-
         self.__execution_stack = ExecutionStack(
-            manager=self.settings["kernel_manager"], ydoc_extension=rtc_extension
+            manager=self.settings["kernel_manager"],
+            ydoc_extension=rtc_extension,
         )
-
         self.handlers.extend(
             [
                 (
@@ -46,12 +57,13 @@ class Extension(ExtensionApp):
                     {"execution_stack": self.__execution_stack},
                 ),
                 (
-                    f"/api/kernels/{_kernel_id_regex}/requests/{_request_id_regex}",
+                    f"/api/kernels/{_kernel_id_regex}/requests/{REQUEST_ID_REGEX}",
                     RequestHandler,
                     {"execution_stack": self.__execution_stack},
                 ),
             ]
         )
+
 
     async def stop_extension(self):
         if hasattr(self, "__execution_stack"):

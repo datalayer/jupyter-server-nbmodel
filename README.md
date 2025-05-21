@@ -1,18 +1,25 @@
-# jupyter_server_nbmodel
+
+[![Datalayer](https://assets.datalayer.tech/datalayer-25.svg)](https://datalayer.io)
+
+[![Become a Sponsor](https://img.shields.io/static/v1?label=Become%20a%20Sponsor&message=%E2%9D%A4&logo=GitHub&style=flat&color=1ABC9C)](https://github.com/sponsors/datalayer)
+
+# 🪐 Jupyter Server NbModel
 
 [![Github Actions Status](https://github.com/datalayer/jupyter-server-nbmodel/workflows/Build/badge.svg)](https://github.com/datalayer/jupyter-server-nbmodel/actions/workflows/build.yml)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/datalayer/jupyter-server-nbmodel/main?urlpath=lab)
 
-A Jupyter Server extension to execute code cell from the server.
+> Stop session timeouts and lost.
+
+A Jupyter Server extension to execute code from the server-side NbModel.
 
 This extension is composed of a Python package named `jupyter_server_nbmodel`
-for the server extension and a NPM package named `jupyter-server-nbmodel`
+for the server extension and a NPM package named `@datalayer/jupyter-server-nbmodel`
 for the frontend extension.
 
 ## Requirements
 
 - Jupyter Server
-- \[recommended\] Real-time collaboration for JupyterLab/Notebook:
+- \[RECOMMENDED\] Real-time collaboration for JupyterLab/Notebook:
   This will push the kernels results in the notebook from the server.
 
 ## Install
@@ -231,19 +238,29 @@ More information are provided within the [ui-tests](./ui-tests/README.md) README
 
 ```bash
 # Terminal 1.
+# You can also invoke `make jupyter-server`
 jupyter server --port 8888 --autoreload --ServerApp.disable_check_xsrf=True --IdentityProvider.token= --ServerApp.port_retries=0
+```
 
+```bash
 # Terminal 2.
 KERNEL=$(curl -X POST http://localhost:8888/api/kernels)
 echo $KERNEL
+
 KERNEL_ID=$(echo $KERNEL | jq --raw-output '.id')
 echo $KERNEL_ID
-REQUEST=$(curl --include http://localhost:8888/api/kernels/$KERNEL_ID/execute -d "{ \"code\": \"print('1+1')\" }")
-RESULT=$(echo $REQUEST | grep -i ^Location: | cut -d' ' -f2 | tr -d '\r')
-echo $RESULT
 
-curl http://localhost:8888$RESULT
-{"status": "ok", "execution_count": 1, "outputs": "[{\"output_type\": \"stream\", \"name\": \"stdout\", \"text\": \"1+1\\n\"}]"}
+RESPONSE=$(curl --include http://localhost:8888/api/kernels/$KERNEL_ID/execute -d "{ \"code\": \"print('1+1')\" }")
+echo $RESPONSE
+
+RESULT_PATH=$(echo $RESPONSE | grep -oP 'Location:\s*\K[^ ]+' | tr -d '\r\n')
+echo $RESULT_PATH
+
+URL="http://localhost:8888${RESULT_PATH}"
+echo $URL
+
+curl "$URL"
+# {"status": "ok", "execution_count": 1, "outputs": "[{\"output_type\": \"stream\", \"name\": \"stdout\", \"text\": \"1+1\\n\"}]"}
 ```
 
 ### Running Tests
