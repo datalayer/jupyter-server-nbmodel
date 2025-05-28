@@ -74,6 +74,7 @@ Execution of a Python code snippet: `print("hello")`
 
 ```mermaid
 sequenceDiagram
+    actor Frontend; participant Shared Document; actor Server; participant ExecutionStack; actor Kernel
     Frontend->>+Server: POST /api/kernels/<id>/execute
     Server->>+ExecutionStack: Queue request
     ExecutionStack->>Kernel: Execute request msg
@@ -81,7 +82,8 @@ sequenceDiagram
     ExecutionStack-->>Server: Task uid
     Server-->>-Frontend: Returns task uid
     loop Running
-        Kernel->>Shared Document: Add output
+        Kernel->>Server: stream / display_data / execute_result / error msg
+        Server->>Shared Document: Add output
         Shared Document->>Frontend: Document update
     end
     loop While status is 202
@@ -104,6 +106,7 @@ Execution of a Python code snippet: `input("Age:")`
 
 ```mermaid
 sequenceDiagram
+    actor Frontend; participant Shared Document; actor Server; participant ExecutionStack; actor Kernel
     Frontend->>+Server: POST /api/kernels/<id>/execute
     Server->>+ExecutionStack: Queue request
     ExecutionStack->>Kernel: Execute request msg
@@ -111,7 +114,8 @@ sequenceDiagram
     ExecutionStack-->>Server: Task uid
     Server-->>-Frontend: Returns task uid
     loop Running
-        Kernel->>Shared Document: Add output
+        Kernel->>Server: stream / display_data / execute_result / error msg
+        Server->>Shared Document: Add output
         Shared Document->>Frontend: Document update
     end
     loop While status is 202
