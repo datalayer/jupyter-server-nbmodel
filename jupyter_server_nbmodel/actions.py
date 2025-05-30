@@ -86,6 +86,60 @@ async def _get_ycell(
     return ycell
 
 
+def handle_carriage_return(s: str) -> str:
+    """Handle text the same way that a terminal emulator would display it
+
+    Args:
+        s: The message
+    Returns:
+        Message with carriage returns handled in the text
+    """
+    lines = s.split('\n')
+    processed_lines = []
+
+    for line in lines:
+        result = []
+        i = 0
+        while i < len(line):
+            if line[i] == '\r':
+                # Move cursor to start of the line
+                # Reset the result buffer and prepare to overwrite
+                i += 1
+                overwrite_chars = []
+                while i < len(line) and line[i] != '\r':
+                    overwrite_chars.append(line[i])
+                    i += 1
+                for j, c in enumerate(overwrite_chars):
+                    if j < len(result):
+                        result[j] = c
+                    else:
+                        result.append(c)
+            else:
+                result.append(line[i])
+                i += 1
+        processed_lines.append(''.join(result))
+
+    return '\n'.join(processed_lines)
+
+
+def handle_backspace(s: str) -> str:
+    """Simulate backspaces in the text
+
+    Args:
+        s: The message
+    Returns:
+        The message with backspaces applied
+    """
+    new_str = []
+    for c in s:
+        if c == '\b':
+            if len(new_str) > 0 and new_str[-1] not in ('\n', '\r'):
+                new_str.pop()
+        else:
+            new_str.append(c)
+    return ''.join(new_str)
+
+
 def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) -> None:
     """Callback on execution request when an output is emitted.
 
@@ -99,29 +153,45 @@ def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) ->
         # FIXME support for version
         output = nbformat.v4.output_from_msg(msg)
         outputs.append(output)
+
         if ycell is not None:
             cell_outputs = ycell["outputs"]
             if msg_type == "stream":
                 with cell_outputs.doc.transaction():
                     text = output["text"]
-                    # FIXME Logic is quite complex at https://github.com/jupyterlab/jupyterlab/blob/7ae2d436fc410b0cff51042a3350ba71f54f4445/packages/outputarea/src/model.ts#L518
+
                     if text.endswith((os.linesep, "\n")):
                         text = text[:-1]
+
                     if (not cell_outputs) or (cell_outputs[-1]["name"] != output["name"]):
-                        output["text"] = [text]
+                        output["text"] = [handle_carriage_return(handle_backspace(text))]
                         cell_outputs.append(output)
                     else:
                         last_output = cell_outputs[-1]
-                        last_output["text"].append(text)
+                        old_text = last_output["text"][-1] if len(last_output["text"]) > 0 else ""
+                        combined_text = old_text + text
+                        if '\r' in combined_text or '\b' in combined_text:
+                            if combined_text[-1] == '\r':
+                                suffix = '\r'
+                                combined_text = combined_text[:-1]
+                            else:
+                                suffix = ''
+                            new_text = handle_carriage_return(handle_backspace(combined_text)) + suffix
+                            last_output["text"][-1] = new_text
+                        else:
+                            last_output["text"].append(text)
                         cell_outputs[-1] = last_output
             else:
                 with cell_outputs.doc.transaction():
                     cell_outputs.append(output)
+
     elif msg_type == "clear_output":
         # FIXME msg.content.wait - if true should clear at the next message
         outputs.clear()
+
         if ycell is not None:
             del ycell["outputs"][:]
+
     elif msg_type == "update_display_data":
         # FIXME
         ...
