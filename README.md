@@ -76,7 +76,7 @@ Execution of a Python code snippet: `print("hello")`
 sequenceDiagram
     actor Frontend; participant Shared Document; actor Server; participant ExecutionStack; actor Kernel
     Frontend->>+Server: POST /api/kernels/<id>/execute
-    Server->>+ExecutionStack: Queue request
+    Server->>+ExecutionStack: put() request into queue
     ExecutionStack->>Kernel: Execute request msg
     activate Kernel
     ExecutionStack-->>Server: Task uid
@@ -88,14 +88,14 @@ sequenceDiagram
     end
     loop While status is 202
         Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
-        Server->>ExecutionStack: Get task result
+        Server->>ExecutionStack: get() task result
         ExecutionStack-->>Server: null
         Server-->>-Frontend: Request status 202
     end
     Kernel-->>ExecutionStack: Execution reply
     deactivate Kernel
     Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
-    Server->>ExecutionStack: Get task result
+    Server->>ExecutionStack: get() task result
     ExecutionStack-->>Server: Result
     Server-->>-Frontend: Status 200 & result
 ```
@@ -108,7 +108,7 @@ Execution of a Python code snippet: `input("Age:")`
 sequenceDiagram
     actor Frontend; participant Shared Document; actor Server; participant ExecutionStack; actor Kernel
     Frontend->>+Server: POST /api/kernels/<id>/execute
-    Server->>+ExecutionStack: Queue request
+    Server->>+ExecutionStack: put() request into queue
     ExecutionStack->>Kernel: Execute request msg
     activate Kernel
     ExecutionStack-->>Server: Task uid
@@ -120,13 +120,13 @@ sequenceDiagram
     end
     loop While status is 202
         Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
-        Server->>ExecutionStack: Get task result
+        Server->>ExecutionStack: get() task result
         ExecutionStack-->>Server: null
         Server-->>-Frontend: Request status 202
     end
     Kernel->>ExecutionStack: Set pending input
     Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
-    Server->>ExecutionStack: Get task result
+    Server->>ExecutionStack: get() task result
     ExecutionStack-->>Server: Pending input
     Server-->>-Frontend: Status 300 & Pending input
     Frontend->>+Server: POST /api/kernels/<id>/input
@@ -134,14 +134,14 @@ sequenceDiagram
     Server-->>-Frontend: Returns
     loop While status is 202
         Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
-        Server->>ExecutionStack: Get task result
+        Server->>ExecutionStack: get() task result
         ExecutionStack-->>Server: null
         Server-->>-Frontend: Request status 202
     end
     Kernel-->>ExecutionStack: Execution reply
     deactivate Kernel
     Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
-    Server->>ExecutionStack: Get task result
+    Server->>ExecutionStack: get() task result
     ExecutionStack-->>Server: Result
     Server-->>-Frontend: Status 200 & result
 ```
