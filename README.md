@@ -75,6 +75,7 @@ Execution of a Python code snippet: `print("hello")`
 ```mermaid
 sequenceDiagram
     actor Frontend; participant Shared Document; actor Server; participant ExecutionStack; actor Kernel
+    Frontend->>Shared Document: [*] busy
     Frontend->>+Server: POST /api/kernels/<id>/execute
     Server->>+ExecutionStack: put() request into queue
     ExecutionStack->>Kernel: Execute request msg
@@ -92,12 +93,15 @@ sequenceDiagram
         ExecutionStack-->>Server: null
         Server-->>-Frontend: Request status 202
     end
-    Kernel-->>ExecutionStack: Execution reply
+    Kernel-->>Server: Execution reply
+    Server->>Shared Document: [𝒏] idle
+    Server-->>ExecutionStack: execution_count, status, outputs
+    Shared Document->>Frontend: [𝒏] idle
     deactivate Kernel
     Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
     Server->>ExecutionStack: get() task result
-    ExecutionStack-->>Server: Result
-    Server-->>-Frontend: Status 200 & result
+    ExecutionStack-->>Server: execution_count, status, outputs
+    Server-->>-Frontend: Status 200 & { execution_count, status, outputs }
 ```
 
 ### With input case
@@ -107,6 +111,7 @@ Execution of a Python code snippet: `input("Age:")`
 ```mermaid
 sequenceDiagram
     actor Frontend; participant Shared Document; actor Server; participant ExecutionStack; actor Kernel
+    Frontend->>Shared Document: [*] busy
     Frontend->>+Server: POST /api/kernels/<id>/execute
     Server->>+ExecutionStack: put() request into queue
     ExecutionStack->>Kernel: Execute request msg
@@ -138,12 +143,15 @@ sequenceDiagram
         ExecutionStack-->>Server: null
         Server-->>-Frontend: Request status 202
     end
-    Kernel-->>ExecutionStack: Execution reply
+    Kernel-->>Server: Execution reply
+    Server->>Shared Document: [𝒏] idle
+    Server-->>ExecutionStack: execution_count, status, outputs
+    Shared Document->>Frontend: [𝒏] idle
     deactivate Kernel
     Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
     Server->>ExecutionStack: get() task result
-    ExecutionStack-->>Server: Result
-    Server-->>-Frontend: Status 200 & result
+    ExecutionStack-->>Server: execution_count, status, outputs
+    Server-->>-Frontend: Status 200 & { execution_count, status, outputs }
 ```
 
 > \[!NOTE\]
