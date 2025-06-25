@@ -270,7 +270,7 @@ async def kernel_worker(
             # FIXME
             # client.session.username = username
             from jupyter_server.gateway.managers import GatewayKernelClient
-            if isinstance(client,GatewayKernelClient) and client.channel_socket is None:
+            if isinstance(client, GatewayKernelClient) and client.channel_socket is None:
                 get_logger().debug(f"start channels {kernel_id}")
                 await client.start_channels()
             results[uid] = await _execute_snippet(
