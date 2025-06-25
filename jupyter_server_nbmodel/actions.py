@@ -145,7 +145,7 @@ def _stdin_hook(kernel_id: str, request_id: str, pending_input: PendingInput, ms
             f"Execution request {kernel_id} received a input request while waiting for an input.\n{msg}"  # noqa: E501
         )
     header = msg["header"].copy()
-    header["date"] = header["date"].isoformat()
+    header["date"] = header["date"] if isinstance(header["date"], str) else header["date"].isoformat()
     pending_input.request_id = request_id
     pending_input.content = InputDescription(
         parent_header=header, input_request=InputRequest(**msg["content"])
@@ -269,6 +269,10 @@ async def kernel_worker(
             client.session.session = uid
             # FIXME
             # client.session.username = username
+            from jupyter_server.gateway.managers import GatewayKernelClient
+            if isinstance(client, GatewayKernelClient) and client.channel_socket is None:
+                get_logger().debug(f"start channels {kernel_id}")
+                await client.start_channels()
             results[uid] = await _execute_snippet(
                 client, ydoc, snippet, metadata, partial(_stdin_hook, kernel_id, uid, pending_input)
             )
