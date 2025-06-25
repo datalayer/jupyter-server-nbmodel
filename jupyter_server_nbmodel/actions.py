@@ -145,7 +145,7 @@ def _stdin_hook(kernel_id: str, request_id: str, pending_input: PendingInput, ms
             f"Execution request {kernel_id} received a input request while waiting for an input.\n{msg}"  # noqa: E501
         )
     header = msg["header"].copy()
-    header["date"] = header["date"] if isinstance(header["date"],str) else header["date"].isoformat()
+    header["date"] = header["date"] if isinstance(header["date"], str) else header["date"].isoformat()
     pending_input.request_id = request_id
     pending_input.content = InputDescription(
         parent_header=header, input_request=InputRequest(**msg["content"])
