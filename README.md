@@ -74,28 +74,34 @@ Execution of a Python code snippet: `print("hello")`
 
 ```mermaid
 sequenceDiagram
+    actor Frontend; participant Shared Document; actor Server; participant ExecutionStack; actor Kernel
+    Frontend->>Shared Document: [*] busy
     Frontend->>+Server: POST /api/kernels/<id>/execute
-    Server->>+ExecutionStack: Queue request
+    Server->>+ExecutionStack: put() request into queue
     ExecutionStack->>Kernel: Execute request msg
     activate Kernel
     ExecutionStack-->>Server: Task uid
     Server-->>-Frontend: Returns task uid
     loop Running
-        Kernel->>Shared Document: Add output
+        Kernel->>Server: stream / display_data / execute_result / error msg
+        Server->>Shared Document: Add output
         Shared Document->>Frontend: Document update
     end
     loop While status is 202
         Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
-        Server->>ExecutionStack: Get task result
+        Server->>ExecutionStack: get() task result
         ExecutionStack-->>Server: null
         Server-->>-Frontend: Request status 202
     end
-    Kernel-->>ExecutionStack: Execution reply
+    Kernel-->>Server: Execution reply
+    Server->>Shared Document: [𝒏] idle
+    Server-->>ExecutionStack: execution_count, status, outputs
+    Shared Document->>Frontend: [𝒏] idle
     deactivate Kernel
     Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
-    Server->>ExecutionStack: Get task result
-    ExecutionStack-->>Server: Result
-    Server-->>-Frontend: Status 200 & result
+    Server->>ExecutionStack: get() task result
+    ExecutionStack-->>Server: execution_count, status, outputs
+    Server-->>-Frontend: Status 200 & { execution_count, status, outputs }
 ```
 
 ### With input case
@@ -104,25 +110,28 @@ Execution of a Python code snippet: `input("Age:")`
 
 ```mermaid
 sequenceDiagram
+    actor Frontend; participant Shared Document; actor Server; participant ExecutionStack; actor Kernel
+    Frontend->>Shared Document: [*] busy
     Frontend->>+Server: POST /api/kernels/<id>/execute
-    Server->>+ExecutionStack: Queue request
+    Server->>+ExecutionStack: put() request into queue
     ExecutionStack->>Kernel: Execute request msg
     activate Kernel
     ExecutionStack-->>Server: Task uid
     Server-->>-Frontend: Returns task uid
     loop Running
-        Kernel->>Shared Document: Add output
+        Kernel->>Server: stream / display_data / execute_result / error msg
+        Server->>Shared Document: Add output
         Shared Document->>Frontend: Document update
     end
     loop While status is 202
         Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
-        Server->>ExecutionStack: Get task result
+        Server->>ExecutionStack: get() task result
         ExecutionStack-->>Server: null
         Server-->>-Frontend: Request status 202
     end
     Kernel->>ExecutionStack: Set pending input
     Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
-    Server->>ExecutionStack: Get task result
+    Server->>ExecutionStack: get() task result
     ExecutionStack-->>Server: Pending input
     Server-->>-Frontend: Status 300 & Pending input
     Frontend->>+Server: POST /api/kernels/<id>/input
@@ -130,16 +139,19 @@ sequenceDiagram
     Server-->>-Frontend: Returns
     loop While status is 202
         Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
-        Server->>ExecutionStack: Get task result
+        Server->>ExecutionStack: get() task result
         ExecutionStack-->>Server: null
         Server-->>-Frontend: Request status 202
     end
-    Kernel-->>ExecutionStack: Execution reply
+    Kernel-->>Server: Execution reply
+    Server->>Shared Document: [𝒏] idle
+    Server-->>ExecutionStack: execution_count, status, outputs
+    Shared Document->>Frontend: [𝒏] idle
     deactivate Kernel
     Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
-    Server->>ExecutionStack: Get task result
-    ExecutionStack-->>Server: Result
-    Server-->>-Frontend: Status 200 & result
+    Server->>ExecutionStack: get() task result
+    ExecutionStack-->>Server: execution_count, status, outputs
+    Server-->>-Frontend: Status 200 & { execution_count, status, outputs }
 ```
 
 > \[!NOTE\]
