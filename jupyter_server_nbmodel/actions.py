@@ -279,6 +279,7 @@ async def kernel_worker(
             queue.task_done()
             get_logger().debug(f"Execution request {uid} processed for kernel {kernel_id}.")
         except (asyncio.CancelledError, KeyboardInterrupt, RuntimeError) as e:
+            results[uid] = {"error": str(e)}
             get_logger().debug(
                 f"Stopping execution requests worker for kernel {kernel_id}…", exc_info=e
             )
