@@ -10,6 +10,9 @@ import nbformat
 
 import pytest
 from jupyter_client.kernelspec import NATIVE_KERNEL_NAME
+from jupyter_client.asynchronous.client import AsyncKernelClient
+from jupyter_server_nbmodel.models import PendingInput
+from jupyter_server_nbmodel.actions import kernel_worker
 
 TEST_TIMEOUT = 15
 
@@ -154,6 +157,44 @@ async def test_post_erroneous_execute(jp_fetch, pending_kernel_is_ready, snippet
 
     await asyncio.sleep(1)
 
+@pytest.mark.asyncio
+async def test_kernel_worker_reports_error(monkeypatch):
+    # Patch _execute_snippet to raise an error
+    async def fake_execute(client, ydoc, snippet, metadata, stdin_hook):
+        raise RuntimeError("simulated failure")
+    monkeypatch.setattr(
+        "jupyter_server_nbmodel.actions._execute_snippet",
+        fake_execute,
+    )
+
+    queue = asyncio.Queue()
+    results = {}
+    pending_input = PendingInput()
+
+    uid = "test-uid"
+    snippet = "print('won't run')"
+    metadata = {"foo": "bar"}
+    await queue.put((uid, snippet, metadata))
+
+    client = AsyncKernelClient()
+    ydoc = None
+
+    worker_task = asyncio.create_task(
+        kernel_worker("kernel-id", client, ydoc, queue, results, pending_input)
+    )
+
+    await asyncio.sleep(0.05)
+
+    # The worker will hit RuntimeError
+    with pytest.raises(RuntimeError) as excinfo:
+        await worker_task
+
+    assert "simulated failure" in str(excinfo.value)
+
+    assert uid in results, "kernel_worker should have recorded an entry for our uid"
+    assert isinstance(results[uid], dict)
+    assert "error" in results[uid], f"Expected an 'error' key in results[{uid!r}]"
+    assert "simulated failure" in results[uid]["error"]
 
 @pytest.mark.timeout(TEST_TIMEOUT)
 async def test_execution_timing_metadata(jp_root_dir, jp_fetch, pending_kernel_is_ready, rtc_create_notebook, jp_serverapp):
