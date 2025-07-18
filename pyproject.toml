@@ -91,7 +91,6 @@ source_dir = "src"
 build_dir = "jupyter_server_nbmodel/labextension"
 
 [tool.pytest.ini_options]
-addopts = "-vv --forked"
 filterwarnings = [
   "error",
   "ignore:Unclosed context <zmq.asyncio.Context:ResourceWarning",

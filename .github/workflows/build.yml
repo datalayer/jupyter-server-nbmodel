@@ -42,7 +42,7 @@ jobs:
         set -eux
         python -m pip install .[test]
 
-        pytest -vv -r ap --cov jupyter_server_nbmodel
+        pytest -vv -r ap --forked --cov jupyter_server_nbmodel
         jupyter server extension list
         jupyter server extension list 2>&1 | grep -ie "jupyter_server_nbmodel.*OK"
 
