@@ -20,6 +20,11 @@ SLEEP = 0.25
 
 
 REQUEST_REGEX = re.compile(r"^/api/kernels/\w+-\w+-\w+-\w+-\w+/requests/\w+-\w+-\w+-\w+-\w+$")
+ANSI_REGEX = re.compile("\x1b\\[(.*?)([@-~])")
+
+
+def strip_ansi(text: str):
+    return ANSI_REGEX.sub("", text)
 
 
 async def _wait_request(fetch, endpoint: str):
@@ -122,7 +127,17 @@ async def test_post_execute(jp_fetch, pending_kernel_is_ready, snippet, output):
     (
         (
             "1 / 0",
-            '{"output_type": "error", "ename": "ZeroDivisionError", "evalue": "division by zero", "traceback": ["\\u001b[0;31m---------------------------------------------------------------------------\\u001b[0m", "\\u001b[0;31mZeroDivisionError\\u001b[0m                         Traceback (most recent call last)", "Cell \\u001b[0;32mIn[1], line 1\\u001b[0m\\n\\u001b[0;32m----> 1\\u001b[0m \\u001b[38;5;241;43m1\\u001b[39;49m\\u001b[43m \\u001b[49m\\u001b[38;5;241;43m/\\u001b[39;49m\\u001b[43m \\u001b[49m\\u001b[38;5;241;43m0\\u001b[39;49m\\n", "\\u001b[0;31mZeroDivisionError\\u001b[0m: division by zero"]}',  # noqa: E501
+            {
+                "output_type": "error",
+                "ename": "ZeroDivisionError",
+                "evalue": "division by zero",
+                "traceback": [
+                    "---------------------------------------------------------------------------",
+                    "ZeroDivisionError                         Traceback (most recent call last)",
+                    "Cell In[1], line 1\n----> 1 1 / 0\n",
+                    "ZeroDivisionError: division by zero"
+                ]
+            },
         ),
     ),
 )
@@ -146,16 +161,26 @@ async def test_post_erroneous_execute(jp_fetch, pending_kernel_is_ready, snippet
 
     assert response.code == 200
     payload = json.loads(response.body)
+    outputs = payload["outputs"]
+    del payload["outputs"]
     assert payload == {
         "status": "error",
-        "execution_count": 1,
-        "outputs": f"[{output}]",
+        "execution_count": 1
     }
+    outputs = json.loads(outputs)
+    for output in outputs:
+        output["traceback"] = [
+            strip_ansi(line)
+            for line in output["traceback"]
+        ]
+
+    assert outputs == [output]
 
     response2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
     assert response2.code == 204
 
     await asyncio.sleep(1)
+
 
 @pytest.mark.asyncio
 async def test_kernel_worker_reports_error(monkeypatch):
