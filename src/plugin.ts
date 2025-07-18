@@ -19,8 +19,10 @@ export const notebookCellExecutor: JupyterFrontEndPlugin<INotebookCellExecutor> 
     autoStart: true,
     provides: INotebookCellExecutor,
     activate: (app: JupyterFrontEnd): INotebookCellExecutor => {
-      return new NotebookCellServerExecutor({
+      const executor = new NotebookCellServerExecutor({
         serverSettings: app.serviceManager.serverSettings
       });
+      console.log('JupyterLab extension jupyter-server-nbmodel is activated!');
+      return executor;
     }
   };
