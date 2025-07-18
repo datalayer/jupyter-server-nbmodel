@@ -221,6 +221,7 @@ async def test_kernel_worker_reports_error(monkeypatch):
     assert "error" in results[uid], f"Expected an 'error' key in results[{uid!r}]"
     assert "simulated failure" in results[uid]["error"]
 
+
 @pytest.mark.timeout(TEST_TIMEOUT)
 async def test_execution_timing_metadata(jp_root_dir, jp_fetch, pending_kernel_is_ready, rtc_create_notebook, jp_serverapp):
     snippet = "a = 1"
