@@ -8,7 +8,7 @@ import { CodeCell } from '@jupyterlab/cells';
 import { URLExt } from '@jupyterlab/coreutils';
 import { OutputPrompt, Stdin } from '@jupyterlab/outputarea';
 import { Kernel, ServerConnection } from '@jupyterlab/services';
-import { IHeader, IInputReply, } from '@jupyterlab/services/lib/kernel/messages';
+import { IHeader, IInputReply } from '@jupyterlab/services/lib/kernel/messages';
 import type { ITranslator } from '@jupyterlab/translation';
 import { PromiseDelegate } from '@lumino/coreutils';
 import { Panel } from '@lumino/widgets';
