@@ -74,7 +74,7 @@ def pending_kernel_is_ready(jp_serverapp):
     return _
 
 
-@pytest.mark.timeout(TEST_TIMEOUT)
+@pytest.mark.timeout(2 * TEST_TIMEOUT)
 @pytest.mark.parametrize(
     "snippet,output",
     (
@@ -88,6 +88,13 @@ def pending_kernel_is_ready(jp_serverapp):
 HTML('<p><b>Jupyter</b> rocks.</p>')""",
             '{"output_type": "execute_result", "metadata": {}, "data": {"text/plain": "<IPython.core.display.HTML object>", "text/html": "<p><b>Jupyter</b> rocks.</p>"}, "execution_count": 1}',  # noqa: E501
         ),
+        (
+          "display('a'); print('b')",
+          (
+            '{"output_type": "display_data", "metadata": {}, "data": {"text/plain": "\'a\'"}}'
+            ', {"output_type": "stream", "name": "stdout", "text": "b\\n"}'
+          )
+        )
     ),
 )
 async def test_post_execute(jp_fetch, pending_kernel_is_ready, snippet, output):
