@@ -74,7 +74,24 @@ def pending_kernel_is_ready(jp_serverapp):
     return _
 
 
-@pytest.mark.timeout(2 * TEST_TIMEOUT)
+@pytest.fixture()
+def rtc_test_notebook(jp_serverapp, rtc_create_notebook):
+    async def _(notebook, path="test.ipynb"):
+        nb_content = nbformat.writes(notebook, version=4)
+        returned_path, _ = await rtc_create_notebook(path, nb_content, store=True)
+        assert path == returned_path
+        document_id = get_document_id(jp_serverapp, "test.ipynb")
+        return document_id
+    return _
+
+
+def get_document_id(jp_serverapp, notebook_name):
+    fim = jp_serverapp.web_app.settings["file_id_manager"]
+    document_id = f'json:notebook:{fim.get_id(notebook_name)}'
+    return document_id
+
+
+@pytest.mark.timeout(TEST_TIMEOUT)
 @pytest.mark.parametrize(
     "snippet,output",
     (
@@ -82,22 +99,9 @@ def pending_kernel_is_ready(jp_serverapp):
             "print('hello buddy')",
             '{"output_type": "stream", "name": "stdout", "text": "hello buddy\\n"}',
         ),
-        ("a = 1", ""),
-        (
-            """from IPython.display import HTML
-HTML('<p><b>Jupyter</b> rocks.</p>')""",
-            '{"output_type": "execute_result", "metadata": {}, "data": {"text/plain": "<IPython.core.display.HTML object>", "text/html": "<p><b>Jupyter</b> rocks.</p>"}, "execution_count": 1}',  # noqa: E501
-        ),
-        (
-          "display('a'); print('b')",
-          (
-            '{"output_type": "display_data", "metadata": {}, "data": {"text/plain": "\'a\'"}}'
-            ', {"output_type": "stream", "name": "stdout", "text": "b\\n"}'
-          )
-        )
     ),
 )
-async def test_post_execute(jp_fetch, pending_kernel_is_ready, snippet, output):
+async def test_post_execute_no_ycell(jp_fetch, pending_kernel_is_ready, snippet, output):
     r = await jp_fetch(
         "api", "kernels", method="POST", body=json.dumps({"name": NATIVE_KERNEL_NAME})
     )
@@ -112,6 +116,72 @@ async def test_post_execute(jp_fetch, pending_kernel_is_ready, snippet, output):
         "execute",
         method="POST",
         body=json.dumps({"code": snippet}),
+    )
+
+    assert response.code == 200
+    payload = json.loads(response.body)
+    assert payload == {
+        "status": "ok",
+        "execution_count": 1,
+        "outputs": f"[{output}]",
+    }
+
+    response2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
+    assert response2.code == 204
+
+    await asyncio.sleep(1)
+
+
+@pytest.mark.timeout(2 * TEST_TIMEOUT)
+@pytest.mark.parametrize(
+    "snippet,output",
+    (
+        (
+            "print('hello buddy')",
+            '{"output_type": "stream", "name": "stdout", "text": ["hello buddy"]}',
+        ),
+        ("a = 1", ""),
+        (
+            """from IPython.display import HTML
+HTML('<p><b>Jupyter</b> rocks.</p>')""",
+            '{"output_type": "execute_result", "metadata": {}, "data": {"text/plain": "<IPython.core.display.HTML object>", "text/html": "<p><b>Jupyter</b> rocks.</p>"}, "execution_count": 1}',  # noqa: E501
+        ),
+        (
+          "display('a'); print('b')",
+          (
+            '{"output_type": "display_data", "metadata": {}, "data": {"text/plain": "\'a\'"}}'
+            ', {"output_type": "stream", "name": "stdout", "text": ["b"]}'
+          )
+        )
+    ),
+)
+async def test_post_execute_wiht_ycell(jp_fetch, pending_kernel_is_ready, snippet, output, rtc_test_notebook):
+    r = await jp_fetch(
+        "api", "kernels", method="POST", body=json.dumps({"name": NATIVE_KERNEL_NAME})
+    )
+    kernel = json.loads(r.body.decode())
+    await pending_kernel_is_ready(kernel["id"])
+
+    nb = nbformat.v4.new_notebook(
+        cells=[nbformat.v4.new_code_cell(source=snippet)]
+    )
+    document_id = await rtc_test_notebook(nb)
+    cell_id = nb["cells"][0]["id"]
+
+    response = await wait_for_request(
+        jp_fetch,
+        "api",
+        "kernels",
+        kernel["id"],
+        "execute",
+        method="POST",
+        body=json.dumps({
+            "code": snippet,
+            "metadata": {
+                "cell_id": cell_id,
+                "document_id": document_id
+            }
+        }),
     )
 
     assert response.code == 200
@@ -230,17 +300,15 @@ async def test_kernel_worker_reports_error(monkeypatch):
 
 
 @pytest.mark.timeout(TEST_TIMEOUT)
-async def test_execution_timing_metadata(jp_root_dir, jp_fetch, pending_kernel_is_ready, rtc_create_notebook, jp_serverapp):
+async def test_execution_timing_metadata(jp_root_dir, jp_fetch, pending_kernel_is_ready, rtc_test_notebook, jp_serverapp):
     snippet = "a = 1"
     nb = nbformat.v4.new_notebook(
         cells=[nbformat.v4.new_code_cell(source=snippet, execution_count=1)]
     )
-    nb_content = nbformat.writes(nb, version=4)
-    path, _ = await rtc_create_notebook("test.ipynb", nb_content, store=True)
+    path = "test.ipynb"
+    document_id = await rtc_test_notebook(nb, path=path)
     collaboration = jp_serverapp.web_app.settings["jupyter_server_ydoc"]
-    fim = jp_serverapp.web_app.settings["file_id_manager"]
-    document_id = f'json:notebook:{fim.get_id("test.ipynb")}'
-    cell_id = nb["cells"][0].get("id")
+    cell_id = nb["cells"][0]["id"]
 
     r = await jp_fetch(
         "api", "kernels", method="POST", body=json.dumps({"name": NATIVE_KERNEL_NAME})
