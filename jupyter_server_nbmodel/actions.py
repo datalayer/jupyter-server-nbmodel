@@ -107,7 +107,7 @@ def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) ->
                     # FIXME Logic is quite complex at https://github.com/jupyterlab/jupyterlab/blob/7ae2d436fc410b0cff51042a3350ba71f54f4445/packages/outputarea/src/model.ts#L518
                     if text.endswith((os.linesep, "\n")):
                         text = text[:-1]
-                    if (not cell_outputs) or (cell_outputs[-1]["name"] != output["name"]):
+                    if (not cell_outputs) or (cell_outputs[-1].get("name", None) != output["name"]):
                         output["text"] = [text]
                         cell_outputs.append(output)
                     else:

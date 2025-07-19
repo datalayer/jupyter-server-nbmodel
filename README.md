@@ -230,7 +230,7 @@ jupyter labextension develop . --overwrite
 To execute them, run:
 
 ```sh
-pytest -vv -r ap --cov jupyter_server_nbmodel
+pytest
 ```
 
 #### Frontend tests

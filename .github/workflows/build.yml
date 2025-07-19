@@ -32,7 +32,7 @@ jobs:
         jlpm
         jlpm run lint:check
 
-    - name: Test the extension
+    - name: Frontend test
       run: |
         set -eux
         jlpm run test
@@ -41,14 +41,18 @@ jobs:
       run: |
         set -eux
         python -m pip install .[test]
-
-        pytest -vv -r ap --cov jupyter_server_nbmodel
         jupyter server extension list
         jupyter server extension list 2>&1 | grep -ie "jupyter_server_nbmodel.*OK"
 
         jupyter labextension list
         jupyter labextension list 2>&1 | grep -ie "jupyter-server-nbmodel.*OK"
+
         python -m jupyterlab.browser_check
+
+    - name: Python test
+      run: |
+        set -eux
+        pytest
 
     - name: Package the extension
       run: |
