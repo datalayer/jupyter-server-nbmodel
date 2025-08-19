@@ -336,6 +336,7 @@ async def kernel_worker(
             )
             # Empty the queue
             while not queue.empty():
+                queue.get_nowait()
                 queue.task_done()
             to_raise = e
             break
@@ -344,6 +345,7 @@ async def kernel_worker(
                 f"Failed to process execution request {uid} for kernel {kernel_id}.", exc_info=e
             )
             if not queue.empty():
+                queue.get_nowait()
                 queue.task_done()
     if to_raise is not None:
         raise to_raise
