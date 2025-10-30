@@ -2,6 +2,45 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.1.1a3
+
+([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/v0.1.1a2...740c31d03daa816dd32171da4fd0e3a0d7801093))
+
+### Enhancements made
+
+- feat:support gateway kernel client [#45](https://github.com/datalayer/jupyter-server-nbmodel/pull/45) ([@dualc](https://github.com/dualc))
+- Split javascript and python source files [#37](https://github.com/datalayer/jupyter-server-nbmodel/pull/37) ([@echarles](https://github.com/echarles))
+
+### Bugs fixed
+
+- Fix crash when handling a stream after non-stream output [#48](https://github.com/datalayer/jupyter-server-nbmodel/pull/48) ([@krassowski](https://github.com/krassowski))
+- Propagate Error to API [#44](https://github.com/datalayer/jupyter-server-nbmodel/pull/44) ([@Darshan808](https://github.com/Darshan808))
+- Remove outdated references to [rtc] in README [#32](https://github.com/datalayer/jupyter-server-nbmodel/pull/32) ([@Darshan808](https://github.com/Darshan808))
+
+### Maintenance and upkeep improvements
+
+- Fix build and CI [#50](https://github.com/datalayer/jupyter-server-nbmodel/pull/50) ([@krassowski](https://github.com/krassowski))
+- Bump actions/create-github-app-token from 1 to 2 [#36](https://github.com/datalayer/jupyter-server-nbmodel/pull/36) ([@dependabot](https://github.com/dependabot))
+
+### Documentation improvements
+
+- Diagram fix: Kernel doesn't update Y doc, Server does [#41](https://github.com/datalayer/jupyter-server-nbmodel/pull/41) ([@cben](https://github.com/cben))
+
+### Other merged PRs
+
+- demo gift [#40](https://github.com/datalayer/jupyter-server-nbmodel/pull/40) ([@eleonorecharles](https://github.com/eleonorecharles))
+- Bump webpack from 5.91.0 to 5.98.0 [#35](https://github.com/datalayer/jupyter-server-nbmodel/pull/35) ([@dependabot](https://github.com/dependabot))
+- Bump nanoid from 3.3.7 to 3.3.11 [#34](https://github.com/datalayer/jupyter-server-nbmodel/pull/34) ([@dependabot](https://github.com/dependabot))
+- Bump cross-spawn from 6.0.5 to 6.0.6 [#33](https://github.com/datalayer/jupyter-server-nbmodel/pull/33) ([@dependabot](https://github.com/dependabot))
+
+### Contributors to this release
+
+([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2025-02-28&to=2025-10-30&type=c))
+
+[@cben](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Acben+updated%3A2025-02-28..2025-10-30&type=Issues) | [@Darshan808](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3ADarshan808+updated%3A2025-02-28..2025-10-30&type=Issues) | [@dependabot](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Adependabot+updated%3A2025-02-28..2025-10-30&type=Issues) | [@dualc](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Adualc+updated%3A2025-02-28..2025-10-30&type=Issues) | [@echarles](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aecharles+updated%3A2025-02-28..2025-10-30&type=Issues) | [@eleonorecharles](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aeleonorecharles+updated%3A2025-02-28..2025-10-30&type=Issues) | [@github-actions](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Agithub-actions+updated%3A2025-02-28..2025-10-30&type=Issues) | [@krassowski](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Akrassowski+updated%3A2025-02-28..2025-10-30&type=Issues)
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.1.1a2
 
 ([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/v0.1.1a1...5f76b6cea5278d4ac6648a107c76ef75bc3d9502))
@@ -16,8 +55,6 @@
 ([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2024-07-29&to=2025-02-28&type=c))
 
 [@Darshan808](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3ADarshan808+updated%3A2024-07-29..2025-02-28&type=Issues) | [@github-actions](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Agithub-actions+updated%3A2024-07-29..2025-02-28&type=Issues) | [@krassowski](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Akrassowski+updated%3A2024-07-29..2025-02-28&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.1.1a1
 
