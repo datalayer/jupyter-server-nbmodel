@@ -63,7 +63,7 @@ jobs:
         pip uninstall -y "jupyter_server_nbmodel" jupyterlab
 
     - name: Upload extension packages
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: extension-artifacts
         path: dist/jupyter_server_nbmodel*
@@ -149,7 +149,7 @@ jobs:
 
     - name: Upload Playwright Test report
       if: always()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: jupyter_server_nbmodel-playwright-tests
         path: |
