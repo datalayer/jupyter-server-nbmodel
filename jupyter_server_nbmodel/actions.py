@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import typing as t
 
+from dataclasses import dataclass
 from functools import partial
 from datetime import datetime, timezone
 
@@ -23,6 +23,42 @@ from jupyter_server_nbmodel.models import (
 )
 from jupyter_server_nbmodel.log import get_logger
 from jupyter_server_nbmodel.event_logger import event_logger
+
+
+@dataclass
+class StreamState:
+    """State for tracking stream output text processing across messages."""
+
+    cursor: int = 0
+    name: str = ""
+    stripped_newline: bool = False  # Track if trailing \n was stripped
+
+
+def _apply_terminal_controls(text: str, new_text: str, cursor: int) -> tuple[str, int]:
+    """Apply terminal control characters (\\r, \\b, \\n) to text.
+
+    Mirrors JupyterLab's packages/outputarea/src/model.ts Private.processText
+    """
+    chars = list(text)
+    for char in new_text:
+        match char:
+            case "\b":
+                if cursor > 0 and chars[cursor - 1] != "\n":
+                    del chars[cursor - 1]
+                    cursor -= 1
+            case "\r":
+                while cursor > 0 and chars[cursor - 1] != "\n":
+                    cursor -= 1
+            case "\n":
+                chars.append("\n")
+                cursor = len(chars)
+            case _:
+                if cursor < len(chars):
+                    chars[cursor] = char
+                else:
+                    chars.append(char)
+                cursor += 1
+    return "".join(chars), cursor
 
 
 if t.TYPE_CHECKING:
@@ -86,12 +122,18 @@ async def _get_ycell(
     return ycell
 
 
-def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) -> None:
+def _output_hook(
+    outputs: list[NotebookNode],
+    ycell: y.Map | None,
+    stream_state: StreamState,
+    msg: dict,
+) -> None:
     """Callback on execution request when an output is emitted.
 
     Args:
         outputs: A list of previously emitted outputs
         ycell: The cell being executed
+        stream_state: Mutable server-side state for tracking stream text processing
         msg: The output message
     """
     msg_type = msg["header"]["msg_type"]
@@ -99,27 +141,59 @@ def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) ->
         # FIXME support for version
         output = nbformat.v4.output_from_msg(msg)
         outputs.append(output)
+
         if ycell is not None:
             cell_outputs = ycell["outputs"]
             if msg_type == "stream":
                 with cell_outputs.doc.transaction():
                     text = output["text"]
-                    # FIXME Logic is quite complex at https://github.com/jupyterlab/jupyterlab/blob/7ae2d436fc410b0cff51042a3350ba71f54f4445/packages/outputarea/src/model.ts#L518
-                    if text.endswith((os.linesep, "\n")):
-                        text = text[:-1]
-                    if (not cell_outputs) or (cell_outputs[-1].get("name", None) != output["name"]):
-                        output["text"] = [text]
+                    stream_name = output["name"]
+
+                    if stream_state.name != stream_name or not cell_outputs:
+                        # Different stream or first output - start fresh
+                        stream_state.name = stream_name
+                        stream_state.stripped_newline = False
+                        processed_text, stream_state.cursor = _apply_terminal_controls("", text, 0)
+                        # Strip trailing newline for storage (matches JupyterLab behavior)
+                        if processed_text.endswith("\n"):
+                            processed_text = processed_text[:-1]
+                            stream_state.stripped_newline = True
+                            stream_state.cursor = len(processed_text)
+                        output["text"] = [processed_text]
                         cell_outputs.append(output)
                     else:
+                        # Same stream - combine with previous, processing \r and \b
                         last_output = cell_outputs[-1]
-                        last_output["text"].append(text)
+                        current_text = "".join(last_output["text"])
+                        # Restore stripped newline before processing
+                        if stream_state.stripped_newline:
+                            current_text += "\n"
+                            stream_state.cursor = len(current_text)
+                        processed_text, stream_state.cursor = _apply_terminal_controls(
+                            current_text, text, stream_state.cursor
+                        )
+                        # Strip trailing newline for storage
+                        if processed_text.endswith("\n"):
+                            processed_text = processed_text[:-1]
+                            stream_state.stripped_newline = True
+                            stream_state.cursor = len(processed_text)
+                        else:
+                            stream_state.stripped_newline = False
+                        last_output["text"] = [processed_text]
                         cell_outputs[-1] = last_output
             else:
+                # Non-stream output resets stream state
+                stream_state.name = ""
+                stream_state.cursor = 0
+                stream_state.stripped_newline = False
                 with cell_outputs.doc.transaction():
                     cell_outputs.append(output)
     elif msg_type == "clear_output":
         # FIXME msg.content.wait - if true should clear at the next message
         outputs.clear()
+        stream_state.name = ""
+        stream_state.cursor = 0
+        stream_state.stripped_newline = False
         if ycell is not None:
             del ycell["outputs"][:]
     elif msg_type == "update_display_data":
@@ -208,13 +282,13 @@ async def _execute_snippet(
                 }
             )
     outputs = []
+    stream_state = StreamState()
     # FIXME we don't check if the session is consistent (aka the kernel is linked to the document)
     #   - should we?
     reply = await ensure_async(
         client.execute_interactive(
             snippet,
-            # FIXME stream partial results
-            output_hook=partial(_output_hook, outputs, ycell),
+            output_hook=partial(_output_hook, outputs, ycell, stream_state),
             stdin_hook=stdin_hook if client.allow_stdin else None,
         )
     )
