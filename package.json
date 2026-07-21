@@ -115,8 +115,7 @@
             "@jupyter/docprovider-extension:notebook-cell-executor"
         ],
         "extension": true,
-        "outputDir": "jupyter_server_nbmodel/labextension",
-        "webpackConfig": "./webpack.lab-config.js"
+        "outputDir": "jupyter_server_nbmodel/labextension"
     },
     "eslintIgnore": [
         "node_modules",
