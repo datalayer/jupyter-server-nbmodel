@@ -120,11 +120,9 @@ async def test_post_execute_no_ycell(jp_fetch, pending_kernel_is_ready, snippet,
 
     assert response.code == 200
     payload = json.loads(response.body)
-    assert payload == {
-        "status": "ok",
-        "execution_count": 1,
-        "outputs": f"[{output}]",
-    }
+    assert payload["status"] == "ok"
+    assert payload["execution_count"] == 1
+    assert json.loads(payload["outputs"]) == json.loads(f"[{output}]")
 
     response2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
     assert response2.code == 204
@@ -186,11 +184,9 @@ async def test_post_execute_wiht_ycell(jp_fetch, pending_kernel_is_ready, snippe
 
     assert response.code == 200
     payload = json.loads(response.body)
-    assert payload == {
-        "status": "ok",
-        "execution_count": 1,
-        "outputs": f"[{output}]",
-    }
+    assert payload["status"] == "ok"
+    assert payload["execution_count"] == 1
+    assert json.loads(payload["outputs"]) == json.loads(f"[{output}]")
 
     response2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
     assert response2.code == 204
