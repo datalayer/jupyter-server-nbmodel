@@ -15,6 +15,7 @@
     "resolveJsonModule": true,
     "outDir": "lib",
     "rootDir": "src",
+    "skipLibCheck": false,
     "strict": true,
     "strictNullChecks": true,
     "target": "ES2022",

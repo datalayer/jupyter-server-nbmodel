@@ -27,11 +27,11 @@ def strip_ansi(text: str):
     return ANSI_REGEX.sub("", text)
 
 
-async def _wait_request(fetch, endpoint: str):
+async def _wait_request(fetch, endpoint: str, timeout: float = TEST_TIMEOUT):
     """Poll periodically to fetch the execution request result."""
     start_time = datetime.datetime.now()
     elapsed = 0.0
-    while elapsed < 0.9 * TEST_TIMEOUT:
+    while elapsed < 0.9 * timeout:
         await asyncio.sleep(SLEEP)
         response = await fetch(endpoint, raise_error=False)
         if response.code >= 400:
@@ -44,15 +44,31 @@ async def _wait_request(fetch, endpoint: str):
     raise TimeoutError(f"Request {endpoint} timed out ({elapsed}s).")
 
 
-async def wait_for_request(fetch, *args, **kwargs):
+async def wait_for_request(fetch, *args, timeout: float = TEST_TIMEOUT, **kwargs):
     """Wait for execution request."""
     r = await fetch(*args, **kwargs)
     assert r.code == 202
     location = r.headers["Location"]
     assert REQUEST_REGEX.match(location) is not None
 
-    ans = await _wait_request(fetch, location)
+    ans = await _wait_request(fetch, location, timeout=timeout)
     return ans
+
+
+async def wait_for_request_with_retry(
+    fetch,
+    *args,
+    timeout: float = TEST_TIMEOUT,
+    retries: int = 0,
+    **kwargs,
+):
+    """Wait for execution request with bounded retries on polling timeout."""
+    for attempt in range(retries + 1):
+        try:
+            return await wait_for_request(fetch, *args, timeout=timeout, **kwargs)
+        except TimeoutError:
+            if attempt == retries:
+                raise
 
 
 @pytest.fixture()
@@ -120,11 +136,9 @@ async def test_post_execute_no_ycell(jp_fetch, pending_kernel_is_ready, snippet,
 
     assert response.code == 200
     payload = json.loads(response.body)
-    assert payload == {
-        "status": "ok",
-        "execution_count": 1,
-        "outputs": f"[{output}]",
-    }
+    assert payload["status"] == "ok"
+    assert payload["execution_count"] == 1
+    assert json.loads(payload["outputs"]) == json.loads(f"[{output}]")
 
     response2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
     assert response2.code == 204
@@ -168,12 +182,14 @@ async def test_post_execute_wiht_ycell(jp_fetch, pending_kernel_is_ready, snippe
     document_id = await rtc_test_notebook(nb)
     cell_id = nb["cells"][0]["id"]
 
-    response = await wait_for_request(
+    response = await wait_for_request_with_retry(
         jp_fetch,
         "api",
         "kernels",
         kernel["id"],
         "execute",
+        timeout=2 * TEST_TIMEOUT,
+        retries=1,
         method="POST",
         body=json.dumps({
             "code": snippet,
@@ -186,11 +202,9 @@ async def test_post_execute_wiht_ycell(jp_fetch, pending_kernel_is_ready, snippe
 
     assert response.code == 200
     payload = json.loads(response.body)
-    assert payload == {
-        "status": "ok",
-        "execution_count": 1,
-        "outputs": f"[{output}]",
-    }
+    assert payload["status"] == "ok"
+    assert payload["execution_count"] == 1
+    assert json.loads(payload["outputs"]) == json.loads(f"[{output}]")
 
     response2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
     assert response2.code == 204

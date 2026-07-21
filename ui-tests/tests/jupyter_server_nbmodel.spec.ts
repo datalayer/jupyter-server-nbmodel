@@ -1,10 +1,4 @@
-import { expect, test } from '@jupyterlab/galata';
-
-/**
- * Don't load JupyterLab webpage before running the tests.
- * This is required to ensure we capture all log messages.
- */
-test.use({ autoGoto: false });
+import { expect, test } from '@playwright/test';
 
 test('should emit an activation console message', async ({ page }) => {
   const logs: string[] = [];
@@ -13,7 +7,17 @@ test('should emit an activation console message', async ({ page }) => {
     logs.push(message.text());
   });
 
-  await page.goto();
+  await page.goto('http://localhost:8888/lab');
+
+  await expect
+    .poll(
+      () =>
+        logs.filter(
+          s => s === 'JupyterLab extension jupyter-server-nbmodel is activated!'
+        ).length,
+      { timeout: 30_000 }
+    )
+    .toBe(1);
 
   expect(
     logs.filter(
