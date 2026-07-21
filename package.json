@@ -28,8 +28,8 @@
     "scripts": {
         "build": "jlpm build:lib && jlpm build:labextension:dev",
         "build:prod": "jlpm clean && jlpm build:lib:prod && jlpm build:labextension",
-        "build:labextension": "jupyter labextension build .",
-        "build:labextension:dev": "jupyter labextension build --development True .",
+        "build:labextension": "jupyter-builder build .",
+        "build:labextension:dev": "jupyter-builder build --development True .",
         "build:lib": "tsc --sourceMap",
         "build:lib:prod": "tsc",
         "clean": "jlpm clean:lib",
@@ -50,7 +50,7 @@
         "test": "jest --coverage",
         "watch": "run-p watch:src watch:labextension",
         "watch:src": "tsc -w --sourceMap",
-        "watch:labextension": "jupyter labextension watch ."
+        "watch:labextension": "jupyter-builder watch ."
     },
     "dependencies": {
         "@jupyterlab/application": "^4.2.0",
@@ -62,13 +62,10 @@
         "@jupyterlab/services": "^7.2.0",
         "@jupyterlab/translation": "^4.2.0",
         "@lumino/coreutils": "^2.1.0",
-        "@lumino/widgets": "^2.3.0"
-    },
-    "resolutions": {
-        "lib0": "0.2.94"
+        "@lumino/widgets": "^2.7.3"
     },
     "devDependencies": {
-        "@jupyterlab/builder": "^4.2.0",
+        "@jupyter/builder": "^1.1.1",
         "@jupyterlab/testutils": "^4.2.0",
         "@types/jest": "^29.4.0",
         "@types/json-schema": "^7.0.11",
@@ -87,10 +84,9 @@
         "rimraf": "^5.0.1",
         "source-map-loader": "^1.0.2",
         "style-loader": "^3.3.1",
-        "stylelint": "^15.10.1",
-        "stylelint-config-recommended": "^13.0.0",
-        "stylelint-config-standard": "^34.0.0",
-        "stylelint-csstree-validator": "^3.0.0",
+        "stylelint": "^16.26.1",
+        "stylelint-config-recommended": "^17.0.0",
+        "stylelint-config-standard": "^39.0.1",
         "stylelint-prettier": "^4.0.0",
         "typescript": "~5.5.4",
         "yjs": "^13.5.0"
@@ -119,7 +115,8 @@
             "@jupyter/docprovider-extension:notebook-cell-executor"
         ],
         "extension": true,
-        "outputDir": "jupyter_server_nbmodel/labextension"
+        "outputDir": "jupyter_server_nbmodel/labextension",
+        "webpackConfig": "./webpack.lab-config.js"
     },
     "eslintIgnore": [
         "node_modules",
@@ -203,9 +200,6 @@
             "stylelint-config-recommended",
             "stylelint-config-standard",
             "stylelint-prettier/recommended"
-        ],
-        "plugins": [
-            "stylelint-csstree-validator"
         ],
         "rules": {
             "csstree/validator": true,
