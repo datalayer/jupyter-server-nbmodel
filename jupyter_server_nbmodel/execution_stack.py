@@ -99,14 +99,18 @@ class ExecutionStack:
             if input_.is_pending():
                 await self.send_input(kernel_id, "")
         self.__pending_inputs.clear()
-        await asyncio.wait_for(asyncio.gather(w for w in self.__workers.values()), timeout=3)
+        await asyncio.wait_for(asyncio.gather(*self.__workers.values()), timeout=3)
         self.__workers.clear()
 
-        await asyncio.wait_for(asyncio.gather(q.join() for q in self.__tasks.values()), timeout=3)
+        await asyncio.wait_for(asyncio.gather(*(q.join() for q in self.__tasks.values())), timeout=3)
         self.__tasks.clear()
 
         for client in self.__kernel_clients.values():
             client.stop_channels()
+            # Destroy the ZMQ context to release internal signaling FDs
+            # (eventfd/pipe pair). stop_channels() only closes the sockets.
+            if getattr(client, "_created_context", False) and client.context:
+                client.context.destroy(linger=0)
         self.__kernel_clients.clear()
         get_logger().debug("ExecutionStack has been disposed.")
 
@@ -137,7 +141,12 @@ class ExecutionStack:
                 client = self.__kernel_clients.pop(kernel_id, None)
                 if client is not None:
                     client.stop_channels()
-
+                    # Destroy the ZMQ context to release internal signaling
+                    # FDs. Without this, each cancel leaks 2 FDs (the
+                    # eventfd/pipe pair used by the context's internal
+                    # signaling mechanism) until GC collects the client.
+                    if getattr(client, "_created_context", False) and client.context:
+                        client.context.destroy(linger=0)
 
     async def send_input(self, kernel_id: str, value: str) -> None:
         """Send input ``value`` to the kernel ``kernel_id``.
