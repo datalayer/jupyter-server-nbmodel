@@ -5,11 +5,10 @@
 # 🪐 Jupyter Server NbModel
 
 [![Github Actions Status](https://github.com/datalayer/jupyter-server-nbmodel/workflows/Build/badge.svg)](https://github.com/datalayer/jupyter-server-nbmodel/actions/workflows/build.yml)
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/datalayer/jupyter-server-nbmodel/main?urlpath=lab)
 
-> Stop session timeouts and lost.
+> Stop loosing your outputs due to session timeouts or network lost.
 
-A Jupyter Server extension to execute code from the server-side NbModel.
+A Jupyter Server extension to execute code from the server-side NbModel to keep your sessions and outputs active.
 
 <p align="center">
   <img src="https://assets.datalayer.tech/jupyter-server-nbmodel/nbmodel.gif" alt="Jupyter Server NbModel Demo" width="800"/>
@@ -19,12 +18,20 @@ A Jupyter Server extension to execute code from the server-side NbModel.
 
 This extension is composed of a Python package named `jupyter_server_nbmodel`
 for the server extension and a NPM package named `@datalayer/jupyter-server-nbmodel`
-for the frontend extension.
+for the frontend extension. Use this snippet and try in your JupyterLab after installing this extension.
+
+```py
+import time
+
+for i in range(1,1000):
+    print(i)
+    time.sleep(1)
+```
 
 ## Requirements
 
-- Jupyter Server
-- \[RECOMMENDED\] Real-time collaboration for JupyterLab/Notebook:
+- JupyterLab or Jupyter Notebook.
+- Real-time collaboration for JupyterLab/Notebook:
   This will push the kernels results in the notebook from the server.
 
 ## Install
