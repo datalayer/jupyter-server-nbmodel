@@ -2,6 +2,38 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.1.1a5
+
+([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/v0.1.1a4...ac6c647308fae05cd63bc9184b9fa6bafd900080))
+
+### Bugs fixed
+
+- Fix file descriptor leak in ExecutionStack.cancel() and dispose() [#64](https://github.com/datalayer/jupyter-server-nbmodel/pull/64) ([@YDawn](https://github.com/YDawn), [@echarles](https://github.com/echarles))
+
+### Maintenance and upkeep improvements
+
+- fix: build with latest jupyterlab [#68](https://github.com/datalayer/jupyter-server-nbmodel/pull/68) ([@echarles](https://github.com/echarles), [@krassowski](https://github.com/krassowski))
+- Bump actions/checkout from 4 to 6 [#61](https://github.com/datalayer/jupyter-server-nbmodel/pull/61) ([@echarles](https://github.com/echarles))
+- Bump actions/cache from 4 to 5 [#60](https://github.com/datalayer/jupyter-server-nbmodel/pull/60) ([@echarles](https://github.com/echarles))
+- Bump actions/upload-artifact from 4 to 6 [#59](https://github.com/datalayer/jupyter-server-nbmodel/pull/59) ([@echarles](https://github.com/echarles))
+- Bump actions/download-artifact from 4 to 7 [#58](https://github.com/datalayer/jupyter-server-nbmodel/pull/58) ([@echarles](https://github.com/echarles))
+- Bump actions/setup-python from 5 to 6 [#53](https://github.com/datalayer/jupyter-server-nbmodel/pull/53) ([@echarles](https://github.com/echarles))
+
+### Documentation improvements
+
+- Enhancements to README [#69](https://github.com/datalayer/jupyter-server-nbmodel/pull/69) ([@echarles](https://github.com/echarles))
+
+### Contributors to this release
+
+The following people contributed discussions, new ideas, code and documentation contributions, and review.
+See [our definition of contributors](https://github-activity.readthedocs.io/en/latest/use/#how-does-this-tool-define-contributions-in-the-reports).
+
+([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2025-10-30&to=2026-07-22&type=c))
+
+@echarles ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aecharles+updated%3A2025-10-30..2026-07-22&type=Issues)) | @krassowski ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Akrassowski+updated%3A2025-10-30..2026-07-22&type=Issues)) | @YDawn ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3AYDawn+updated%3A2025-10-30..2026-07-22&type=Issues))
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.1.1a4
 
 ([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/v0.1.1a2...740c31d03daa816dd32171da4fd0e3a0d7801093))
@@ -38,8 +70,6 @@
 ([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2025-02-28&to=2025-10-30&type=c))
 
 [@cben](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Acben+updated%3A2025-02-28..2025-10-30&type=Issues) | [@Darshan808](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3ADarshan808+updated%3A2025-02-28..2025-10-30&type=Issues) | [@dependabot](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Adependabot+updated%3A2025-02-28..2025-10-30&type=Issues) | [@dualc](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Adualc+updated%3A2025-02-28..2025-10-30&type=Issues) | [@echarles](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aecharles+updated%3A2025-02-28..2025-10-30&type=Issues) | [@eleonorecharles](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aeleonorecharles+updated%3A2025-02-28..2025-10-30&type=Issues) | [@github-actions](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Agithub-actions+updated%3A2025-02-28..2025-10-30&type=Issues) | [@krassowski](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Akrassowski+updated%3A2025-02-28..2025-10-30&type=Issues)
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.1.1a3
 
