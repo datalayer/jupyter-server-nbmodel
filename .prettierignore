@@ -4,3 +4,4 @@ node_modules
 **/package.json
 !/package.json
 jupyter_server_nbmodel
+README.md
