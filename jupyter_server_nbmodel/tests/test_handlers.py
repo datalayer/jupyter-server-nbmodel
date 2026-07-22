@@ -12,7 +12,7 @@ import pytest
 from jupyter_client.kernelspec import NATIVE_KERNEL_NAME
 from jupyter_client.asynchronous.client import AsyncKernelClient
 from jupyter_server_nbmodel.models import PendingInput
-from jupyter_server_nbmodel.actions import kernel_worker
+from jupyter_server_nbmodel.actions import kernel_worker, _apply_terminal_controls
 
 TEST_TIMEOUT = 15
 
@@ -21,6 +21,42 @@ SLEEP = 0.25
 
 REQUEST_REGEX = re.compile(r"^/api/kernels/\w+-\w+-\w+-\w+-\w+/requests/\w+-\w+-\w+-\w+-\w+$")
 ANSI_REGEX = re.compile("\x1b\\[(.*?)([@-~])")
+
+
+def test_apply_terminal_controls_backspace_and_carriage_return():
+    """Test terminal control processing with \\b and \\r across multiple messages.
+
+    Simulates:
+        print('1110\\b', end='', flush=True)  # "111" (backspace deletes '0')
+        print('11', end='', flush=True)       # "11111"
+        print('\\r2 ', end='', flush=True)    # "2 111" (CR + overwrite)
+        print('3', end='', flush=True)        # "2 311"
+        print('4')                            # "2 341\\n"
+    """
+    # Message 1: "1110\b" -> "111"
+    text, cursor = _apply_terminal_controls("", "1110\b", 0)
+    assert text == "111"
+    assert cursor == 3
+
+    # Message 2: "11" -> "11111"
+    text, cursor = _apply_terminal_controls(text, "11", cursor)
+    assert text == "11111"
+    assert cursor == 5
+
+    # Message 3: "\r2 " -> "2 111" (carriage return moves to start, overwrites)
+    text, cursor = _apply_terminal_controls(text, "\r2 ", cursor)
+    assert text == "2 111"
+    assert cursor == 2
+
+    # Message 4: "3" -> "2 311"
+    text, cursor = _apply_terminal_controls(text, "3", cursor)
+    assert text == "2 311"
+    assert cursor == 3
+
+    # Message 5: "4\n" -> "2 341\n"
+    text, cursor = _apply_terminal_controls(text, "4\n", cursor)
+    assert text == "2 341\n"
+    assert cursor == 6
 
 
 def strip_ansi(text: str):
