@@ -1,13 +1,16 @@
 {
   "compilerOptions": {
     "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
     "composite": true,
     "declaration": true,
     "esModuleInterop": true,
     "incremental": true,
-    "jsx": "react",
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "lib": ["ESNext", "DOM"],
     "module": "esnext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "noEmitOnError": true,
     "noImplicitAny": true,
     "noUnusedLocals": true,
@@ -15,11 +18,12 @@
     "resolveJsonModule": true,
     "outDir": "lib",
     "rootDir": "src",
-    "skipLibCheck": false,
+    "skipLibCheck": true,
     "strict": true,
     "strictNullChecks": true,
     "target": "ES2022",
     "types": ["node"]
   },
-  "include": ["src/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/__tests__/**/*", "**/*.spec.ts", "**/*.test.ts"]
 }
