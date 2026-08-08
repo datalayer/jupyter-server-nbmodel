@@ -7,27 +7,25 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import threading
 import typing as t
-
-from functools import partial
 from datetime import datetime, timezone
+from functools import partial
 
 import nbformat
-
 from jupyter_core.utils import ensure_async
 
+from jupyter_server_nbmodel.event_logger import event_logger
+from jupyter_server_nbmodel.log import get_logger
 from jupyter_server_nbmodel.models import (
-    PendingInput,
     InputDescription,
     InputRequest,
+    PendingInput,
 )
-from jupyter_server_nbmodel.log import get_logger
-from jupyter_server_nbmodel.event_logger import event_logger
-
 
 if t.TYPE_CHECKING:
-    import jupyter_client
     from nbformat import NotebookNode
+
     try:
         import jupyter_server_ydoc
         import pycrdt as y
@@ -145,7 +143,9 @@ def _stdin_hook(kernel_id: str, request_id: str, pending_input: PendingInput, ms
             f"Execution request {kernel_id} received a input request while waiting for an input.\n{msg}"  # noqa: E501
         )
     header = msg["header"].copy()
-    header["date"] = header["date"] if isinstance(header["date"], str) else header["date"].isoformat()
+    header["date"] = (
+        header["date"] if isinstance(header["date"], str) else header["date"].isoformat()
+    )
     pending_input.request_id = request_id
     pending_input.content = InputDescription(
         parent_header=header, input_request=InputRequest(**msg["content"])
@@ -160,8 +160,56 @@ def _get_error(outputs):
     )
 
 
+def _threadsafe_hook(
+    loop: asyncio.AbstractEventLoop, callback: t.Callable[[dict], None] | None
+) -> t.Callable[[dict], None] | None:
+    """Run a synchronous remote-client hook safely on the server event loop."""
+    if callback is None:
+        return None
+
+    def hook(message: dict) -> None:
+        completed = threading.Event()
+        errors: list[BaseException] = []
+
+        def invoke() -> None:
+            try:
+                callback(message)
+            except BaseException as error:
+                errors.append(error)
+            finally:
+                completed.set()
+
+        loop.call_soon_threadsafe(invoke)
+        completed.wait()
+        if errors:
+            raise errors[0]
+
+    return hook
+
+
+async def _run_in_thread(callback: t.Callable[[], t.Any]) -> t.Any:
+    """Run a blocking callback without relying on the global asyncio executor."""
+    result: list[t.Any] = []
+    errors: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            result.append(callback())
+        except BaseException as error:
+            errors.append(error)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    while thread.is_alive():
+        await asyncio.sleep(0.01)
+    thread.join()
+    if errors:
+        raise errors[0]
+    return result[0]
+
+
 async def _execute_snippet(
-    client: jupyter_client.asynchronous.client.AsyncKernelClient,
+    client: t.Any,
     ydoc: jupyter_server_ydoc.app.YDocExtension | None,
     snippet: str,
     metadata: dict | None,
@@ -204,20 +252,33 @@ async def _execute_snippet(
                     "event_type": "execution_start",
                     "cell_id": metadata["cell_id"],
                     "document_id": metadata["document_id"],
-                    "timestamp": execution_start_time
-                }
+                    "timestamp": execution_start_time,
+                },
             )
     outputs = []
     # FIXME we don't check if the session is consistent (aka the kernel is linked to the document)
     #   - should we?
-    reply = await ensure_async(
-        client.execute_interactive(
-            snippet,
-            # FIXME stream partial results
-            output_hook=partial(_output_hook, outputs, ycell),
-            stdin_hook=stdin_hook if client.allow_stdin else None,
+    output_hook = partial(_output_hook, outputs, ycell)
+    if not getattr(client, "_server_nbmodel_remote", False):
+        reply = await ensure_async(
+            client.execute_interactive(
+                snippet,
+                output_hook=output_hook,
+                stdin_hook=stdin_hook if client.allow_stdin else None,
+            )
         )
-    )
+    else:
+        # Remote WebSocket clients are synchronous. Run their blocking receive
+        # loop in a worker thread while applying YDoc updates on the main loop.
+        loop = asyncio.get_running_loop()
+        reply = await _run_in_thread(
+            partial(
+                client.execute_interactive,
+                snippet,
+                output_hook=_threadsafe_hook(loop, output_hook),
+                stdin_hook=_threadsafe_hook(loop, stdin_hook if client.allow_stdin else None),
+            )
+        )
     reply_content = reply["content"]
     if ycell is not None:
         execution_end_time = datetime.now(timezone.utc).isoformat()[:-6]
@@ -237,10 +298,10 @@ async def _execute_snippet(
                 "event_type": "execution_end",
                 "cell_id": metadata["cell_id"],
                 "document_id": metadata["document_id"],
-                "success": reply_content["status"]=="ok",
+                "success": reply_content["status"] == "ok",
                 "kernel_error": _get_error(outputs),
-                "timestamp": execution_end_time
-            }
+                "timestamp": execution_end_time,
+            },
         )
     return {
         "status": reply_content["status"],
@@ -252,7 +313,7 @@ async def _execute_snippet(
 
 async def kernel_worker(
     kernel_id: str,
-    client: jupyter_client.asynchronous.client.AsyncKernelClient,
+    client: t.Any,
     ydoc: jupyter_server_ydoc.app.YDocExtension | None,
     queue: asyncio.Queue,
     results: dict,
@@ -270,6 +331,7 @@ async def kernel_worker(
             # FIXME
             # client.session.username = username
             from jupyter_server.gateway.managers import GatewayKernelClient
+
             if isinstance(client, GatewayKernelClient) and client.channel_socket is None:
                 get_logger().debug(f"start channels {kernel_id}")
                 await client.start_channels()

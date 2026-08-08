@@ -23,6 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
+    "jupyter-kernel-client>=1.0.0",
     "jupyter_client>=8.6.2",
     "jupyter_server>=2.0.1,<3",
 ]
