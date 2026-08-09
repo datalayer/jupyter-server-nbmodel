@@ -35,7 +35,7 @@ lab = [
   "jupyter-server-ydoc>=1.0.0b1",
 ]
 test = [
-  "pytest~=8.2",
+  "pytest>=8.2,<10.0",
   "pytest-asyncio",
   "pytest-cov<7",
   "pytest-jupyter[server]>=0.6",
