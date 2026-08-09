@@ -33,14 +33,20 @@ def test_output_hook_preserves_stream_newlines() -> None:
 
 def test_output_hook_appends_to_reloaded_stream_text() -> None:
     """A stream loaded as collaborative Text remains writable after restart."""
-    doc = Doc()
-    persisted = doc.get("outputs", type=Array)
-    ycell = {"outputs": persisted}
+    original_doc = Doc()
+    original_outputs = original_doc.get("outputs", type=Array)
+    _output_hook([], {"outputs": original_outputs}, _stream_message("before restart\n"))
 
-    _output_hook([], ycell, _stream_message("before restart\n"))
-    _output_hook([], ycell, _stream_message("after restart\n"))
+    reloaded_doc = Doc()
+    reloaded_doc.apply_update(original_doc.get_update())
+    reloaded_outputs = reloaded_doc.get("outputs", type=Array)
+    peer_state = original_doc.get_state()
 
-    assert str(persisted[0]["text"]) == "before restart\nafter restart\n"
+    _output_hook([], {"outputs": reloaded_outputs}, _stream_message("after restart\n"))
+    original_doc.apply_update(reloaded_doc.get_update(peer_state))
+
+    assert str(reloaded_outputs[0]["text"]) == "before restart\nafter restart\n"
+    assert str(original_outputs[0]["text"]) == "before restart\nafter restart\n"
 
 
 async def test_dedup_task_queue_empty():

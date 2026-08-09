@@ -5,18 +5,77 @@
  */
 
 import { CodeCell } from '@jupyterlab/cells';
+import type { ICodeCellModel } from '@jupyterlab/cells';
 import { URLExt } from '@jupyterlab/coreutils';
 import { OutputPrompt, Stdin } from '@jupyterlab/outputarea';
 import { Kernel, ServerConnection } from '@jupyterlab/services';
 import { IHeader, IInputReply } from '@jupyterlab/services/lib/kernel/messages';
 import type { ITranslator } from '@jupyterlab/translation';
-import { PromiseDelegate } from '@lumino/coreutils';
+import { JSONExt, PromiseDelegate } from '@lumino/coreutils';
 import { Panel } from '@lumino/widgets';
 
 /**
  * Polling interval for accepted execution requests.
  */
 const MAX_POLLING_INTERVAL = 1000;
+
+/**
+ * Parse server outputs and apply JupyterLab's consecutive stream merge rule.
+ */
+export function normalizeServerOutputs(outputs: string | unknown[]): any[] {
+  const rawOutputs = (
+    typeof outputs === 'string' ? JSON.parse(outputs) : outputs
+  ) as any[];
+  return rawOutputs.reduce<any[]>((merged, output) => {
+    const previous = merged[merged.length - 1];
+    if (
+      output.output_type === 'stream' &&
+      previous?.output_type === 'stream' &&
+      previous.name === output.name
+    ) {
+      const previousText = Array.isArray(previous.text)
+        ? previous.text.join('')
+        : (previous.text ?? '');
+      const text = Array.isArray(output.text)
+        ? output.text.join('')
+        : (output.text ?? '');
+      previous.text = previousText + text;
+    } else {
+      merged.push(output);
+    }
+    return merged;
+  }, []);
+}
+
+/**
+ * Apply an in-progress output snapshot when collaborative updates did not
+ * reach this browser. Healthy shared documents already contain the same
+ * outputs, so polling remains a no-op for their normal streaming path.
+ */
+async function reconcilePendingOutputs(
+  cell: CodeCell,
+  response: Response
+): Promise<void> {
+  let payload: { outputs?: string | unknown[] };
+  try {
+    payload = await response.json();
+  } catch {
+    return;
+  }
+  if (payload.outputs === undefined) {
+    return;
+  }
+
+  const serverOutputs = normalizeServerOutputs(payload.outputs);
+  const sharedCodeCell = (cell.model as ICodeCellModel).sharedModel;
+  if (!JSONExt.deepEqual(sharedCodeCell.getOutputs(), serverOutputs)) {
+    console.debug('[jupyter-server-nbmodel] Applying pending output snapshot', {
+      cellId: sharedCodeCell.getId(),
+      outputCount: serverOutputs.length
+    });
+    sharedCodeCell.setOutputs(serverOutputs);
+  }
+}
 
 export async function requestServer(
   cell: CodeCell,
@@ -120,6 +179,7 @@ export async function requestServer(
           promise.reject(await ServerConnection.ResponseError.create(response));
         }
       } else if (response.status === 202) {
+        await reconcilePendingOutputs(cell, response);
         let redirectUrl = response.headers.get('Location') || url;
         if (!redirectUrl.startsWith(settings.baseUrl)) {
           redirectUrl = URLExt.join(settings.baseUrl, redirectUrl);

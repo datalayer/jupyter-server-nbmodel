@@ -143,7 +143,9 @@ class RequestHandler(ExtensionHandlerMixin, APIHandler):
                 self.set_status(202)
                 self.finish("{}")
             else:
-                if "error" in r:
+                if r.get("pending") is True:
+                    self.set_status(202)
+                elif "error" in r:
                     self.set_status(500)
                     self.log.debug(f"{r}")
                 elif "input_request" in r:

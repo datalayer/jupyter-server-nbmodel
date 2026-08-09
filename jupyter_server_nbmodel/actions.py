@@ -43,7 +43,7 @@ async def _get_ycell(
 
     Args:
         ydoc: The YDoc jupyter server extension
-        metadata: Execution context
+        metadata: Execution context, including the notebook path and cell ID
     Returns:
         The cell
     """
@@ -52,16 +52,30 @@ async def _get_ycell(
         get_logger().warning(msg)
         return None
     document_id = metadata.get("document_id")
+    document_path = metadata.get("document_path")
     cell_id = metadata.get("cell_id")
-    if document_id is None or cell_id is None:
+    if (document_id is None and document_path is None) or cell_id is None:
         msg = (
-            "document_id and cell_id not defined. The outputs won't be written within the document."
+            "Neither document_path nor document_id is defined with cell_id. "
+            "The outputs won't be written within the document."
         )
         get_logger().debug(msg)
         return None
-    notebook: YNotebook | None = await ydoc.get_document(room_id=document_id, copy=False)
+    notebook: YNotebook | None = None
+    if isinstance(document_path, str) and document_path:
+        # The document_id is collaborative state and may refer to a room from
+        # before a server restart. Resolve the current live room from the file
+        # path first so updates reach the browser that is actually connected.
+        notebook = await ydoc.get_document(
+            path=document_path,
+            content_type="notebook",
+            file_format="json",
+            copy=False,
+        )
+    if notebook is None and document_id is not None:
+        notebook = await ydoc.get_document(room_id=document_id, copy=False)
     if notebook is None:
-        msg = f"Document with ID {document_id} not found."
+        msg = f"Document at path {document_path!r} with ID {document_id!r} not found."
         get_logger().warning(msg)
         return None
     ycells = filter(lambda c: c["id"] == cell_id, notebook.ycells)
@@ -101,25 +115,29 @@ def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) ->
             if msg_type == "stream":
                 from pycrdt import Map, Text
 
-                with cell_outputs.doc.transaction():
-                    text = output["text"]
-                    # FIXME Logic is quite complex at https://github.com/jupyterlab/jupyterlab/blob/7ae2d436fc410b0cff51042a3350ba71f54f4445/packages/outputarea/src/model.ts#L518
-                    if (not cell_outputs) or (cell_outputs[-1].get("name", None) != output["name"]):
+                text = output["text"]
+                # FIXME Logic is quite complex at https://github.com/jupyterlab/jupyterlab/blob/7ae2d436fc410b0cff51042a3350ba71f54f4445/packages/outputarea/src/model.ts#L518
+                if cell_outputs and cell_outputs[-1].get("name", None) == output["name"]:
+                    last_output = cell_outputs[-1]
+                    previous_text = last_output["text"]
+                    if isinstance(previous_text, Text):
+                        # Text.__iadd__ owns its transaction. Nesting it in a
+                        # Doc transaction can leave updates with unresolved
+                        # dependencies in the persistent YStore.
+                        previous_text += text
+                    else:
+                        if isinstance(previous_text, list):
+                            previous_text = "".join(previous_text)
+                        with cell_outputs.doc.transaction():
+                            last_output["text"] = Text((previous_text or "") + text)
+                else:
+                    with cell_outputs.doc.transaction():
                         youtput = dict(output)
                         youtput["text"] = Text(text)
                         # A nested shared type is only integrated when its
                         # parent is also a shared type. Appending the plain
                         # dict would persist the Text value as null.
                         cell_outputs.append(Map(youtput))
-                    else:
-                        last_output = cell_outputs[-1]
-                        previous_text = last_output["text"]
-                        if isinstance(previous_text, Text):
-                            previous_text += text
-                        else:
-                            if isinstance(previous_text, list):
-                                previous_text = "".join(previous_text)
-                            last_output["text"] = Text((previous_text or "") + text)
             else:
                 with cell_outputs.doc.transaction():
                     cell_outputs.append(output)
@@ -222,6 +240,7 @@ async def _execute_snippet(
     snippet: str,
     metadata: dict | None,
     stdin_hook: t.Callable[[dict], None] | None,
+    progress: dict[str, t.Any] | None = None,
 ) -> dict[str, t.Any]:
     """Snippet executor
 
@@ -231,6 +250,7 @@ async def _execute_snippet(
         snippet: The code snippet to execute
         metadata: The code snippet metadata; e.g. to define the snippet context
         stdin_hook: The stdin message callback
+        progress: Mutable execution progress exposed by the request status endpoint
     Returns:
         The execution status and outputs.
     """
@@ -264,6 +284,11 @@ async def _execute_snippet(
                 },
             )
     outputs = []
+    if progress is not None:
+        # Keep the same list throughout execution so every output hook is
+        # immediately visible to request polling without copying kernel
+        # messages or waiting for the final execute reply.
+        progress["outputs"] = outputs
     # FIXME we don't check if the session is consistent (aka the kernel is linked to the document)
     #   - should we?
     output_hook = partial(_output_hook, outputs, ycell)
@@ -403,8 +428,15 @@ async def kernel_worker(
             if isinstance(client, GatewayKernelClient) and client.channel_socket is None:
                 get_logger().debug(f"start channels {kernel_id}")
                 await client.start_channels()
+            progress = {"pending": True, "outputs": []}
+            results[uid] = progress
             results[uid] = await _execute_snippet(
-                client, ydoc, snippet, metadata, partial(_stdin_hook, kernel_id, uid, pending_input)
+                client,
+                ydoc,
+                snippet,
+                metadata,
+                partial(_stdin_hook, kernel_id, uid, pending_input),
+                progress,
             )
             get_logger().debug(f"Execution request {uid} processed for kernel {kernel_id}.")
 

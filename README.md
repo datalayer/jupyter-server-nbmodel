@@ -73,6 +73,21 @@ the frontend extension, check the frontend extension is installed:
 jupyter labextension list
 ```
 
+### Existing notebooks stop receiving live outputs
+
+We have observed persistent `.jupyter_ystore.db` histories for which the
+browser's Yjs document leaves new server updates pending because their CRDT
+dependencies cannot be resolved. Kernel execution and notebook persistence
+still succeed, but the browser receives no shared-cell change events. The exact
+operation that originally creates this unresolved dependency chain has not yet
+been isolated.
+
+The frontend therefore also reconciles output snapshots returned while polling
+the execution request. This preserves live output for affected notebooks and
+is a no-op when collaborative document updates are healthy. Removing the
+YStore database resets its history, but also discards collaboration history and
+should only be considered after making a backup.
+
 ## How does it works
 
 ### Generic case
@@ -97,8 +112,9 @@ sequenceDiagram
     loop While status is 202
         Frontend->>+Server: GET /api/kernels/<id>/requests/<uid>
         Server->>ExecutionStack: get() task result
-        ExecutionStack-->>Server: null
-        Server-->>-Frontend: Request status 202
+        ExecutionStack-->>Server: outputs accumulated so far
+        Server-->>-Frontend: Request status 202 & outputs snapshot
+        Frontend->>Shared Document: Reconcile missing output updates
     end
     Kernel-->>Server: Execution reply
     Server->>Shared Document: [𝒏] idle

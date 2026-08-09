@@ -6,13 +6,14 @@ import asyncio
 import datetime
 import json
 import re
-import nbformat
 
+import nbformat
 import pytest
-from jupyter_client.kernelspec import NATIVE_KERNEL_NAME
 from jupyter_client.asynchronous.client import AsyncKernelClient
-from jupyter_server_nbmodel.models import PendingInput
+from jupyter_client.kernelspec import NATIVE_KERNEL_NAME
+
 from jupyter_server_nbmodel.actions import kernel_worker
+from jupyter_server_nbmodel.models import PendingInput
 
 TEST_TIMEOUT = 15
 
@@ -146,6 +147,66 @@ async def test_post_execute_no_ycell(jp_fetch, pending_kernel_is_ready, snippet,
     await asyncio.sleep(1)
 
 
+@pytest.mark.timeout(TEST_TIMEOUT)
+async def test_pending_execute_returns_stream_outputs(jp_fetch, pending_kernel_is_ready):
+    """Pending request polling exposes output before execution completes."""
+    response = await jp_fetch(
+        "api", "kernels", method="POST", body=json.dumps({"name": NATIVE_KERNEL_NAME})
+    )
+    kernel = json.loads(response.body.decode())
+    await pending_kernel_is_ready(kernel["id"])
+
+    response = await jp_fetch(
+        "api",
+        "kernels",
+        kernel["id"],
+        "execute",
+        method="POST",
+        body=json.dumps(
+            {
+                "code": (
+                    "import time\n"
+                    "print('streamed before completion', flush=True)\n"
+                    "time.sleep(1.5)\n"
+                    "print('completed', flush=True)"
+                )
+            }
+        ),
+    )
+    assert response.code == 202
+    location = response.headers["Location"]
+
+    pending_outputs = []
+    for _ in range(10):
+        await asyncio.sleep(0.1)
+        response = await jp_fetch(location, raise_error=False)
+        assert response.code == 202, "Execution completed before its stream was observed."
+        payload = json.loads(response.body)
+        if "outputs" in payload:
+            pending_outputs = json.loads(payload["outputs"])
+        if pending_outputs:
+            break
+
+    assert pending_outputs == [
+        {
+            "output_type": "stream",
+            "name": "stdout",
+            "text": "streamed before completion\n",
+        }
+    ]
+
+    response = await _wait_request(jp_fetch, location)
+    assert response.code == 200
+    final_outputs = json.loads(json.loads(response.body)["outputs"])
+    assert "".join(output["text"] for output in final_outputs) == (
+        "streamed before completion\ncompleted\n"
+    )
+
+    response = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
+    assert response.code == 204
+    await asyncio.sleep(1)
+
+
 @pytest.mark.timeout(2 * TEST_TIMEOUT)
 @pytest.mark.parametrize(
     "snippet,output",
@@ -169,7 +230,9 @@ HTML('<p><b>Jupyter</b> rocks.</p>')""",
         )
     ),
 )
-async def test_post_execute_with_ycell(jp_fetch, pending_kernel_is_ready, snippet, output, rtc_test_notebook):
+async def test_post_execute_with_ycell(
+    jp_fetch, pending_kernel_is_ready, snippet, output, rtc_test_notebook
+):
     r = await jp_fetch(
         "api", "kernels", method="POST", body=json.dumps({"name": NATIVE_KERNEL_NAME})
     )
@@ -195,7 +258,10 @@ async def test_post_execute_with_ycell(jp_fetch, pending_kernel_is_ready, snippe
             "code": snippet,
             "metadata": {
                 "cell_id": cell_id,
-                "document_id": document_id
+                # A restored notebook can retain a room ID from before the
+                # server restart. The path must select the active room.
+                "document_id": f"{document_id}-stale",
+                "document_path": "test.ipynb"
             }
         }),
     )
@@ -276,7 +342,7 @@ async def test_post_erroneous_execute(jp_fetch, pending_kernel_is_ready, snippet
 @pytest.mark.asyncio
 async def test_kernel_worker_reports_error(monkeypatch):
     # Patch _execute_snippet to raise an error
-    async def fake_execute(client, ydoc, snippet, metadata, stdin_hook):
+    async def fake_execute(client, ydoc, snippet, metadata, stdin_hook, progress=None):
         raise RuntimeError("simulated failure")
     monkeypatch.setattr(
         "jupyter_server_nbmodel.actions._execute_snippet",
@@ -314,7 +380,13 @@ async def test_kernel_worker_reports_error(monkeypatch):
 
 
 @pytest.mark.timeout(TEST_TIMEOUT)
-async def test_execution_timing_metadata(jp_root_dir, jp_fetch, pending_kernel_is_ready, rtc_test_notebook, jp_serverapp):
+async def test_execution_timing_metadata(
+    jp_root_dir,
+    jp_fetch,
+    pending_kernel_is_ready,
+    rtc_test_notebook,
+    jp_serverapp,
+):
     snippet = "a = 1"
     nb = nbformat.v4.new_notebook(
         cells=[nbformat.v4.new_code_cell(source=snippet, execution_count=1)]
@@ -356,7 +428,9 @@ async def test_execution_timing_metadata(jp_root_dir, jp_fetch, pending_kernel_i
 
     # Assert that start and end time exist in 'execution'
     execution = cell_data['metadata']['execution']
-    assert 'shell.execute_reply.started' in execution, "'shell.execute_reply.started' does not exist in 'execution'"
+    assert "shell.execute_reply.started" in execution, (
+        "'shell.execute_reply.started' does not exist in 'execution'"
+    )
     assert 'shell.execute_reply' in execution, "'shell.execute_reply' does not exist in 'execution'"
 
     started_time = execution['shell.execute_reply.started']

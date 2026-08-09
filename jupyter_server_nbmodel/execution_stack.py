@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import threading
 import typing as t
 import uuid
@@ -273,6 +274,13 @@ class ExecutionStack:
         result = kernel_results[uid]
         if result == NO_RESULT:
             return None
+        elif isinstance(result, dict) and result.get("pending") is True:
+            # Return a serialized snapshot while retaining the mutable progress
+            # object until the worker replaces it with the final result.
+            return {
+                "pending": True,
+                "outputs": json.dumps(result.get("outputs", [])),
+            }
         else:
             return kernel_results.pop(uid)
 
