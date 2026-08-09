@@ -2,6 +2,37 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.1.3
+
+([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/v0.1.1a5...04dc0cde712fd1cc5df0f7f89def24716dd5d384))
+
+### Enhancements made
+
+- feat: remote server [#71](https://github.com/datalayer/jupyter-server-nbmodel/pull/71) ([@echarles](https://github.com/echarles))
+
+### Other merged PRs
+
+- Bump actions/cache from 5 to 6 [#78](https://github.com/datalayer/jupyter-server-nbmodel/pull/78) ([@echarles](https://github.com/echarles))
+- Update pytest-cov requirement from \<7 to \<8 [#77](https://github.com/datalayer/jupyter-server-nbmodel/pull/77) ([@echarles](https://github.com/echarles))
+- Update pytest requirement from ~=8.2 to >=8.2,\<10.0 [#76](https://github.com/datalayer/jupyter-server-nbmodel/pull/76) ([@echarles](https://github.com/echarles))
+- Bump actions/checkout from 6 to 7 [#75](https://github.com/datalayer/jupyter-server-nbmodel/pull/75) ([@echarles](https://github.com/echarles))
+- Bump actions/setup-python from 6 to 7 [#74](https://github.com/datalayer/jupyter-server-nbmodel/pull/74) ([@echarles](https://github.com/echarles))
+- Bump actions/download-artifact from 7 to 8 [#73](https://github.com/datalayer/jupyter-server-nbmodel/pull/73) ([@echarles](https://github.com/echarles))
+- Bump actions/upload-artifact from 6 to 7 [#72](https://github.com/datalayer/jupyter-server-nbmodel/pull/72) ([@echarles](https://github.com/echarles))
+- bump: 0.1.2 [#70](https://github.com/datalayer/jupyter-server-nbmodel/pull/70) ([@echarles](https://github.com/echarles))
+- Bugfix / Errors when triggering restart kernel and run all cells [#51](https://github.com/datalayer/jupyter-server-nbmodel/pull/51) ([@truongle1501](https://github.com/truongle1501), [@echarles](https://github.com/echarles))
+
+### Contributors to this release
+
+The following people contributed discussions, new ideas, code and documentation contributions, and review.
+See [our definition of contributors](https://github-activity.readthedocs.io/en/latest/use/#how-does-this-tool-define-contributions-in-the-reports).
+
+([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2026-07-22&to=2026-08-09&type=c))
+
+@echarles ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aecharles+updated%3A2026-07-22..2026-08-09&type=Issues)) | @truongle1501 ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Atruongle1501+updated%3A2026-07-22..2026-08-09&type=Issues))
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.1.1a5
 
 ([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/v0.1.1a4...ac6c647308fae05cd63bc9184b9fa6bafd900080))
@@ -31,8 +62,6 @@ See [our definition of contributors](https://github-activity.readthedocs.io/en/l
 ([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2025-10-30&to=2026-07-22&type=c))
 
 @echarles ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aecharles+updated%3A2025-10-30..2026-07-22&type=Issues)) | @krassowski ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Akrassowski+updated%3A2025-10-30..2026-07-22&type=Issues)) | @YDawn ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3AYDawn+updated%3A2025-10-30..2026-07-22&type=Issues))
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.1.1a4
 
