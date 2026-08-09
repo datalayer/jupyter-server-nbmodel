@@ -22,6 +22,14 @@ jobs:
     steps:
       - uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
 
+      - name: Trusted Publisher Preflight
+        run: |
+          echo "Using npm Trusted Publishing (OIDC); NPM_TOKEN is not used in this workflow."
+          echo "If publish fails with OIDC/trusted publisher auth errors, configure npm Trusted Publisher for:"
+          echo "- Repository: datalayer/jupyter-server-nbmodel"
+          echo "- Workflow: .github/workflows/publish-release.yml"
+          echo "- Package: @datalayer/jupyter-server-nbmodel"
+
       - name: Populate Release
         id: populate-release
         uses: jupyter-server/jupyter_releaser/.github/actions/populate-release@v2
