@@ -99,18 +99,27 @@ def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) ->
         if ycell is not None:
             cell_outputs = ycell["outputs"]
             if msg_type == "stream":
+                from pycrdt import Map, Text
+
                 with cell_outputs.doc.transaction():
                     text = output["text"]
                     # FIXME Logic is quite complex at https://github.com/jupyterlab/jupyterlab/blob/7ae2d436fc410b0cff51042a3350ba71f54f4445/packages/outputarea/src/model.ts#L518
                     if (not cell_outputs) or (cell_outputs[-1].get("name", None) != output["name"]):
-                        cell_outputs.append(output)
+                        youtput = dict(output)
+                        youtput["text"] = Text(text)
+                        # A nested shared type is only integrated when its
+                        # parent is also a shared type. Appending the plain
+                        # dict would persist the Text value as null.
+                        cell_outputs.append(Map(youtput))
                     else:
                         last_output = cell_outputs[-1]
                         previous_text = last_output["text"]
-                        if isinstance(previous_text, list):
-                            previous_text = "".join(previous_text)
-                        last_output["text"] = previous_text + text
-                        cell_outputs[-1] = last_output
+                        if isinstance(previous_text, Text):
+                            previous_text += text
+                        else:
+                            if isinstance(previous_text, list):
+                                previous_text = "".join(previous_text)
+                            last_output["text"] = Text((previous_text or "") + text)
             else:
                 with cell_outputs.doc.transaction():
                     cell_outputs.append(output)

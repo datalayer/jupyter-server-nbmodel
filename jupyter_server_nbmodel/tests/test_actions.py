@@ -1,20 +1,10 @@
 """Unit tests for execution actions."""
 
 import asyncio
-from contextlib import nullcontext
+
+from pycrdt import Array, Doc, Text
 
 from jupyter_server_nbmodel.actions import _output_hook, dedup_task_queue
-
-
-class _Outputs(list):
-    """Minimal shared output array used to exercise streaming persistence."""
-
-    class _Doc:
-        @staticmethod
-        def transaction():
-            return nullcontext()
-
-    doc = _Doc()
 
 
 def _stream_message(text: str) -> dict:
@@ -27,16 +17,30 @@ def _stream_message(text: str) -> dict:
 def test_output_hook_preserves_stream_newlines() -> None:
     """Merged stream chunks retain separators when the notebook is reloaded."""
     emitted = []
-    persisted = _Outputs()
+    doc = Doc()
+    persisted = doc.get("outputs", type=Array)
     ycell = {"outputs": persisted}
 
     _output_hook(emitted, ycell, _stream_message("1\n"))
     _output_hook(emitted, ycell, _stream_message("2\n"))
 
-    assert persisted == [
-        {"output_type": "stream", "name": "stdout", "text": "1\n2\n"}
-    ]
-    assert persisted[0]["text"] == "1\n2\n"
+    assert len(persisted) == 1
+    assert persisted[0]["output_type"] == "stream"
+    assert persisted[0]["name"] == "stdout"
+    assert isinstance(persisted[0]["text"], Text)
+    assert str(persisted[0]["text"]) == "1\n2\n"
+
+
+def test_output_hook_appends_to_reloaded_stream_text() -> None:
+    """A stream loaded as collaborative Text remains writable after restart."""
+    doc = Doc()
+    persisted = doc.get("outputs", type=Array)
+    ycell = {"outputs": persisted}
+
+    _output_hook([], ycell, _stream_message("before restart\n"))
+    _output_hook([], ycell, _stream_message("after restart\n"))
+
+    assert str(persisted[0]["text"]) == "before restart\nafter restart\n"
 
 
 async def test_dedup_task_queue_empty():
