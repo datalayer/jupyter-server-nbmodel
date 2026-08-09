@@ -1,8 +1,42 @@
 """Unit tests for execution actions."""
 
 import asyncio
+from contextlib import nullcontext
 
-from jupyter_server_nbmodel.actions import dedup_task_queue
+from jupyter_server_nbmodel.actions import _output_hook, dedup_task_queue
+
+
+class _Outputs(list):
+    """Minimal shared output array used to exercise streaming persistence."""
+
+    class _Doc:
+        @staticmethod
+        def transaction():
+            return nullcontext()
+
+    doc = _Doc()
+
+
+def _stream_message(text: str) -> dict:
+    return {
+        "header": {"msg_type": "stream"},
+        "content": {"name": "stdout", "text": text},
+    }
+
+
+def test_output_hook_preserves_stream_newlines() -> None:
+    """Merged stream chunks retain separators when the notebook is reloaded."""
+    emitted = []
+    persisted = _Outputs()
+    ycell = {"outputs": persisted}
+
+    _output_hook(emitted, ycell, _stream_message("1\n"))
+    _output_hook(emitted, ycell, _stream_message("2\n"))
+
+    assert persisted == [
+        {"output_type": "stream", "name": "stdout", "text": "1\n2\n"}
+    ]
+    assert persisted[0]["text"] == "1\n2\n"
 
 
 async def test_dedup_task_queue_empty():

@@ -152,7 +152,7 @@ async def test_post_execute_no_ycell(jp_fetch, pending_kernel_is_ready, snippet,
     (
         (
             "print('hello buddy')",
-            '{"output_type": "stream", "name": "stdout", "text": ["hello buddy"]}',
+            '{"output_type": "stream", "name": "stdout", "text": "hello buddy\\n"}',
         ),
         ("a = 1", ""),
         (
@@ -164,7 +164,7 @@ HTML('<p><b>Jupyter</b> rocks.</p>')""",
           "display('a'); print('b')",
           (
             '{"output_type": "display_data", "metadata": {}, "data": {"text/plain": "\'a\'"}}'
-            ', {"output_type": "stream", "name": "stdout", "text": ["b"]}'
+            ', {"output_type": "stream", "name": "stdout", "text": "b\\n"}'
           )
         )
     ),

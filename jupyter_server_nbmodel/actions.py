@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import threading
 import typing as t
 from datetime import datetime, timezone
@@ -103,14 +102,14 @@ def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) ->
                 with cell_outputs.doc.transaction():
                     text = output["text"]
                     # FIXME Logic is quite complex at https://github.com/jupyterlab/jupyterlab/blob/7ae2d436fc410b0cff51042a3350ba71f54f4445/packages/outputarea/src/model.ts#L518
-                    if text.endswith((os.linesep, "\n")):
-                        text = text[:-1]
                     if (not cell_outputs) or (cell_outputs[-1].get("name", None) != output["name"]):
-                        output["text"] = [text]
                         cell_outputs.append(output)
                     else:
                         last_output = cell_outputs[-1]
-                        last_output["text"].append(text)
+                        previous_text = last_output["text"]
+                        if isinstance(previous_text, list):
+                            previous_text = "".join(previous_text)
+                        last_output["text"] = previous_text + text
                         cell_outputs[-1] = last_output
             else:
                 with cell_outputs.doc.transaction():
