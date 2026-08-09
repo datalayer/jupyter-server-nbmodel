@@ -388,7 +388,6 @@ async def kernel_worker(
                 }
             get_logger().debug(f"Processing execution request {uid} for kernel {kernel_id}…")
             get_logger().debug("%s %s %s", uid, snippet, metadata)
-            client.session.session = uid
             # FIXME
             # client.session.username = username
             from jupyter_server.gateway.managers import GatewayKernelClient

@@ -110,7 +110,12 @@ class ExecutionStack:
         if kernel_id not in self.__kernel_clients:
             remote_server = self.__remote_servers.get(kernel_id)
             if remote_server is None:
-                return self._get_local_client(kernel_id)
+                client = self._get_local_client(kernel_id)
+                # A newly connected IOPub SUB socket can otherwise miss the
+                # first execution messages while its subscription propagates.
+                # The readiness handshake also drains startup messages before
+                # the worker submits its first execution request.
+                await client.wait_for_ready()
             else:
                 from jupyter_kernel_client.manager import KernelHttpManager
 
@@ -134,7 +139,7 @@ class ExecutionStack:
         try:
             client = await self._get_client(kernel_id)
         except BaseException as error:
-            get_logger().error("Failed to connect to remote kernel %s.", kernel_id, exc_info=error)
+            get_logger().error("Failed to connect to kernel %s.", kernel_id, exc_info=error)
             queue = self.__tasks[kernel_id]
             while not queue.empty():
                 uid, _, _ = queue.get_nowait()
@@ -306,17 +311,5 @@ class ExecutionStack:
         self.__tasks[kernel_id].put_nowait((uid, snippet, metadata))
 
         if kernel_id not in self.__workers:
-            if remote_server is None:
-                self.__workers[kernel_id] = asyncio.create_task(
-                    kernel_worker(
-                        kernel_id,
-                        self._get_local_client(kernel_id),
-                        self.__ydoc,
-                        self.__tasks[kernel_id],
-                        self.__execution_results[kernel_id],
-                        self.__pending_inputs[kernel_id],
-                    )
-                )
-            else:
-                self.__workers[kernel_id] = asyncio.create_task(self._run_worker(kernel_id))
+            self.__workers[kernel_id] = asyncio.create_task(self._run_worker(kernel_id))
         return uid
