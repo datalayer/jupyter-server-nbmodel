@@ -113,6 +113,8 @@ filterwarnings = [
   # Transient stdout/stderr temp files from the kernel subprocess/provisioner.
   "ignore:unclosed file <_io.*name='/tmp:ResourceWarning",
   "ignore:Exception ignored in:pytest.PytestUnraisableExceptionWarning",
+  # Emitted by Jupyter Server's ContentsManager with nbformat 5.11.
+  "ignore:Using NotebookNotary without a `with` block is deprecated:PendingDeprecationWarning",
 ]
 
 [tool.mypy]
