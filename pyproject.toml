@@ -42,7 +42,7 @@ test = [
   "pytest-cov",
   "pytest-jupyter[server]",
   "pytest-timeout",
-  "pytest-forked",
+  "pytest-forked>=1.7.5",
   "jupyter-server-ydoc[test]",
   "jupyter-server-fileid",
 ]
@@ -116,6 +116,12 @@ filterwarnings = [
   # Emitted by Jupyter Server's ContentsManager with nbformat 5.11.
   "ignore:Using NotebookNotary without a `with` block is deprecated:PendingDeprecationWarning",
 ]
+
+[tool.coverage.run]
+concurrency = ["multiprocessing"]
+parallel = true
+patch = ["_exit", "fork"]
+source = ["jupyter_server_nbmodel"]
 
 [tool.mypy]
 check_untyped_defs = true

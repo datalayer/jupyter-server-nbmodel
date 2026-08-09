@@ -313,18 +313,18 @@ async def _execute_snippet(
 
 async def dedup_task_queue(q: asyncio.Queue) -> list[str]:
     """
-    Deduplicate tasks in an asyncio.Queue by keeping only the last 
+    Deduplicate tasks in an asyncio.Queue by keeping only the last
     submitted task per cell_id.
 
     Problem:
         After "Restart Kernel and Run All Cells", tasks from the previous
         run may still remain in the queue. This causes duplicate tasks
-        for the same cell_id to exist. When consumed, both the old and 
+        for the same cell_id to exist. When consumed, both the old and
         new tasks run, leading to duplicated execution.
 
     Solution:
         This function drains the queue, keeps only the last occurrence
-        of each cell_id, and puts those tasks back into the queue in the 
+        of each cell_id, and puts those tasks back into the queue in the
         correct order. That way, each cell_id has only one pending task.
     """
     if q.empty():
@@ -357,12 +357,12 @@ async def dedup_task_queue(q: asyncio.Queue) -> list[str]:
 
     dropped_uids: list[str] = []
     for i, item in enumerate(items):
+        # Balance the original put before optionally re-queuing the item.
+        q.task_done()
         if i in keep_indices:
             await q.put(item)
         else:
             dropped_uids.append(item[0])
-            # Dropped items are intentionally completed without execution.
-            q.task_done()
 
     return dropped_uids
 
