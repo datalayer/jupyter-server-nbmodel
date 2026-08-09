@@ -1659,6 +1659,7 @@ __metadata:
     stylelint-config-standard: ^39.0.1
     stylelint-prettier: ^4.0.0
     typescript: ~5.5.4
+    vscode-languageserver-protocol: ^3.17.0
     yjs: ^13.5.0
   languageName: unknown
   linkType: soft
