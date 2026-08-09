@@ -10,13 +10,8 @@ from jupyter_server.extension.application import ExtensionApp
 from jupyter_server.services.kernels.handlers import _kernel_id_regex
 
 from jupyter_server_nbmodel.execution_stack import ExecutionStack
-from jupyter_server_nbmodel.handlers import (
-    ExecuteHandler,
-    InputHandler,
-    RequestHandler,
-)
+from jupyter_server_nbmodel.handlers import ExecuteHandler, InputHandler, RequestHandler
 from jupyter_server_nbmodel.log import get_logger
-
 
 RTC_EXTENSIONAPP_NAME = "jupyter_server_ydoc"
 

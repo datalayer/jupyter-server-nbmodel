@@ -12,7 +12,9 @@ import { INotebookCellExecutor } from '@jupyterlab/notebook';
 import { ServerConnection } from '@jupyterlab/services';
 import { nullTranslator } from '@jupyterlab/translation';
 import { JSONExt } from '@lumino/coreutils';
-import { normalizeServerOutputs, requestServer } from './requestServer';
+import { clearServerExecutionMetadata } from './executionMetadata';
+import { normalizeServerOutputs } from './outputReconciliation';
+import { requestServer } from './requestServer';
 
 /**
  * Notebook cell executor posting a request to the server for execution.
@@ -151,6 +153,7 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
             );
             const data = await response.json();
             success = data['status'] === 'ok';
+            clearServerExecutionMetadata(cell as CodeCell);
 
             const serverOutputs = normalizeServerOutputs(
               data['outputs'] ?? '[]'
@@ -219,6 +222,45 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
         break;
     }
     return Promise.resolve(true);
+  }
+}
+
+/**
+ * Resume polling an execution request persisted in cell metadata.
+ */
+export async function resumeCellServerExecution(
+  cell: CodeCell,
+  requestUrl: string,
+  serverSettings: ServerConnection.ISettings
+): Promise<boolean> {
+  const sharedCodeCell = (cell.model as ICodeCellModel).sharedModel;
+  sharedCodeCell.executionState = 'running';
+  try {
+    const response = await requestServer(
+      cell,
+      requestUrl,
+      { method: 'GET' },
+      serverSettings
+    );
+    const data = await response.json();
+    const serverOutputs = normalizeServerOutputs(data['outputs'] ?? '[]');
+    if (!JSONExt.deepEqual(sharedCodeCell.getOutputs(), serverOutputs)) {
+      sharedCodeCell.setOutputs(serverOutputs);
+    }
+    sharedCodeCell.execution_count = data['execution_count'] ?? null;
+    sharedCodeCell.executionState = 'idle';
+    clearServerExecutionMetadata(cell);
+    return data['status'] === 'ok';
+  } catch (error) {
+    if (
+      error instanceof ServerConnection.ResponseError &&
+      error.response.status === 404
+    ) {
+      clearServerExecutionMetadata(cell);
+      sharedCodeCell.executionState = 'idle';
+      return false;
+    }
+    throw error;
   }
 }
 

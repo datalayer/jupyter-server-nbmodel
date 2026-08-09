@@ -30,6 +30,18 @@ class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
         self._execution_stack = execution_stack
 
     @tornado.web.authenticated
+    def get(self, kernel_id: str) -> None:
+        """Return active executions for the kernel without consuming them."""
+        self.finish(
+            json.dumps(
+                {
+                    "kernel_id": kernel_id,
+                    "requests": self._execution_stack.pending(kernel_id),
+                }
+            )
+        )
+
+    @tornado.web.authenticated
     async def post(self, kernel_id: str) -> None:
         """
         Execute a code snippet within the kernel
@@ -70,9 +82,23 @@ class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
             get_logger().error(msg)
             raise tornado.web.HTTPError(status_code=HTTPStatus.NOT_FOUND, reason=msg)
         uid = self._execution_stack.put(kernel_id, snippet, metadata, remote_server=remote_server)
+        location = f"/api/kernels/{kernel_id}/requests/{uid}"
         self.set_status(HTTPStatus.ACCEPTED)
-        self.set_header("Location", f"/api/kernels/{kernel_id}/requests/{uid}")
-        self.finish("{}")
+        self.set_header("Location", location)
+        self.finish(
+            json.dumps(
+                {
+                    "request_id": uid,
+                    "kernel_id": kernel_id,
+                    "cell_id": metadata.get("cell_id"),
+                    "document_path": metadata.get("document_path"),
+                    "pending": True,
+                    "request_status": "queued",
+                    "request_url": location,
+                    "outputs": "[]",
+                }
+            )
+        )
 
 
 class InputHandler(ExtensionHandlerMixin, APIHandler):
@@ -143,14 +169,14 @@ class RequestHandler(ExtensionHandlerMixin, APIHandler):
                 self.set_status(202)
                 self.finish("{}")
             else:
-                if r.get("pending") is True:
-                    self.set_status(202)
-                elif "error" in r:
+                if "error" in r:
                     self.set_status(500)
                     self.log.debug(f"{r}")
                 elif "input_request" in r:
                     self.set_status(300)
                     self.set_header("Location", f"/api/kernels/{kernel_id}/input")
+                elif r.get("pending") is True:
+                    self.set_status(202)
                 else:
                     self.set_status(200)
                 self.finish(json.dumps(r))

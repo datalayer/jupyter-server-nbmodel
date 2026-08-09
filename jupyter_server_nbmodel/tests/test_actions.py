@@ -32,21 +32,39 @@ def test_output_hook_preserves_stream_newlines() -> None:
 
 
 def test_output_hook_appends_to_reloaded_stream_text() -> None:
-    """A stream loaded as collaborative Text remains writable after restart."""
+    """A stream loaded as collaborative Text remains writable after reload."""
+    emitted = []
     original_doc = Doc()
     original_outputs = original_doc.get("outputs", type=Array)
-    _output_hook([], {"outputs": original_outputs}, _stream_message("before restart\n"))
+    _output_hook(emitted, {"outputs": original_outputs}, _stream_message("before reload\n"))
 
     reloaded_doc = Doc()
     reloaded_doc.apply_update(original_doc.get_update())
     reloaded_outputs = reloaded_doc.get("outputs", type=Array)
     peer_state = original_doc.get_state()
 
-    _output_hook([], {"outputs": reloaded_outputs}, _stream_message("after restart\n"))
+    _output_hook(emitted, {"outputs": reloaded_outputs}, _stream_message("after reload\n"))
     original_doc.apply_update(reloaded_doc.get_update(peer_state))
 
-    assert str(reloaded_outputs[0]["text"]) == "before restart\nafter restart\n"
-    assert str(original_outputs[0]["text"]) == "before restart\nafter restart\n"
+    assert str(reloaded_outputs[0]["text"]) == "before reload\nafter reload\n"
+    assert str(original_outputs[0]["text"]) == "before reload\nafter reload\n"
+
+
+def test_output_hook_does_not_append_browser_snapshot_twice() -> None:
+    """A snapshot already inserted by polling remains unchanged by the hook."""
+    emitted = []
+    doc = Doc()
+    persisted = doc.get("outputs", type=Array)
+    ycell = {"outputs": persisted}
+
+    _output_hook(emitted, ycell, _stream_message("1\n"))
+    # Simulate the browser fallback applying the next accumulated snapshot
+    # before the matching collaborative hook is integrated locally.
+    persisted[0]["text"] += "2\n"
+    _output_hook(emitted, ycell, _stream_message("2\n"))
+
+    assert len(persisted) == 1
+    assert str(persisted[0]["text"]) == "1\n2\n"
 
 
 async def test_dedup_task_queue_empty():

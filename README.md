@@ -75,18 +75,109 @@ jupyter labextension list
 
 ### Existing notebooks stop receiving live outputs
 
-We have observed persistent `.jupyter_ystore.db` histories for which the
-browser's Yjs document leaves new server updates pending because their CRDT
-dependencies cannot be resolved. Kernel execution and notebook persistence
-still succeed, but the browser receives no shared-cell change events. The exact
-operation that originally creates this unresolved dependency chain has not yet
-been isolated.
+This issue was initially difficult to distinguish from a kernel message-routing
+problem. On the same server and kernel, a newly created notebook could stream
+normally while an existing notebook executed without displaying anything. A
+server restart alone did not consistently cause or resolve the problem, so the
+important difference was the notebook's persisted collaborative history rather
+than the lifetime of the kernel or server process.
 
-The frontend therefore also reconciles output snapshots returned while polling
-the execution request. This preserves live output for affected notebooks and
-is a no-op when collaborative document updates are healthy. Removing the
-YStore database resets its history, but also discards collaboration history and
-should only be considered after making a backup.
+The debugging sessions produced the following evidence:
+
+- The server received the kernel IOPub messages and its output hook processed
+  them. After execution, the expected stream output was present in the
+  persisted `.ipynb` file. This ruled out a missing kernel message, an incorrect
+  kernel client ID, and a future rejecting messages from another parent ID.
+- Affected browser models emitted no shared-cell change events—not even the
+  prompt updates normally observed during execution—although execution
+  continued on the server.
+- Resolving the active YDoc by notebook path, instead of relying on a possibly
+  stale room ID retained across a restart, fixed one failure mode but did not
+  fix notebooks carrying the problematic history.
+- Removing `jupyter_server_nbmodel` restored JupyterLab's standard
+  kernel-future execution and displayed outputs. Disabling collaboration alone
+  did not restore the server-side execution path, confirming that the failure
+  was in the document/output synchronization used by this extension rather
+  than in the kernel itself.
+- Backing up and removing `.jupyter_ystore.db` restored output updates for the
+  same notebooks. This was the strongest indication that the failure followed
+  persisted YStore state rather than notebook source, kernel state, or a server
+  restart.
+- In the failing state, the browser's Yjs document retained incoming updates in
+  `Y.Doc.store.pendingStructs`. Those updates referenced CRDT dependencies that
+  the browser could not resolve, so they never became observable shared-model
+  changes even though the server could persist the resulting notebook.
+
+The immediate root cause is therefore an unresolved dependency chain in some
+historical YStore documents. The exact earlier operation that first creates
+that chain has not yet been isolated. Stream-output representation was one area
+of concern: nested Yjs text must be integrated through a shared map, and a
+`pycrdt.Text` append must not be wrapped in another document transaction. Those
+operations have been corrected, but they cannot repair invalid history that is
+already stored.
+
+To remain functional with an affected history, execution now uses a primary
+output path plus two recovery layers:
+
+1. Collaborative YDoc updates remain the primary, immediate streaming path.
+2. Every pending `GET /api/kernels/<id>/requests/<uid>` response also contains
+   the outputs accumulated by the server so far. The frontend normalizes
+   consecutive stream chunks and compares the snapshot with the current shared
+   cell. Older or initially empty snapshots are ignored, while a newer stream
+   snapshot appends only its missing text suffix through JupyterLab's output
+   model. It does not replace and recreate the complete rendered output on
+   every poll. Polling backs off to a maximum interval of one second.
+3. The final `200` response reconciles outputs, execution count, and idle state
+   once more. This explains why an earlier version of the recovery displayed
+   output only when execution completed: it only implemented this final step,
+   not the pending snapshots.
+
+The existing execution endpoints also return the request ID, kernel ID, cell
+ID, notebook path, and request state (`queued`, `running`, `input`, or
+`complete`). While an execution is active, its request ID and URL are stored in
+the code cell metadata under `jupyter_server_nbmodel`. After a page refresh, a
+separate restoration plugin reads that metadata and resumes the same
+`GET /api/kernels/<id>/requests/<uid>` poller; no additional discovery endpoint
+is needed. The resumed request also restores the stock JupyterLab kernel
+connection to `busy` until the final response changes it to `idle`. A kernel
+connection created after a refresh intentionally starts as `unknown` and
+cannot replay the `busy` IOPub message emitted before it existed, so the
+frontend feeds the richer REST request state through JupyterLab's normal
+kernel-status update path. This works without the Datalayer UI extension.
+If transient cell metadata has not reached the refreshed browser yet, the
+frontend queries the existing `GET /api/kernels/<id>/execute` route for active
+requests and restores the matching cell poller from the returned request ID,
+URL, notebook path, and cell ID.
+
+Polling reconciliation and the server output hook are both writers to the
+shared document. Before appending a stream chunk, the server therefore compares
+the current shared text with its accumulated kernel output. If the browser has
+already inserted `1234` from a pending response, integrating the corresponding
+server update is a no-op rather than appending the same snapshot and persisting
+`12341234`. This check does not replace or delete integrated output-array
+entries, because restructuring nested Yjs values can expose a transient stream
+without a `text` field while JupyterLab is constructing the cell widget.
+
+Useful browser diagnostics are:
+
+- `[jupyter-server-nbmodel] Received shared cell update` indicates that normal
+  collaborative updates are reaching the cell.
+- `[jupyter-server-nbmodel] Applying pending output snapshot` indicates that
+  the polling fallback found outputs missing from the browser model.
+- `[jupyter-server-nbmodel] Execution completed` reports the number of shared
+  updates and whether final output or execution-count reconciliation was
+  needed.
+
+The Network panel can also be used to inspect the pending `202` responses. Once
+the kernel has emitted output, their JSON bodies should contain a serialized
+`outputs` snapshot. If the server response and persisted `.ipynb` contain the
+output while the browser reports no shared updates, the problem is in document
+synchronization rather than kernel execution.
+
+Removing `.jupyter_ystore.db` resets the stored collaborative history, but it
+also discards that history for every document recorded in the database. Its
+location depends on the Jupyter Server configuration and content root. Stop the
+server and make a backup before using this as a last-resort recovery action.
 
 ## How does it works
 

@@ -115,32 +115,59 @@ def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) ->
             if msg_type == "stream":
                 from pycrdt import Map, Text
 
-                text = output["text"]
-                # FIXME Logic is quite complex at https://github.com/jupyterlab/jupyterlab/blob/7ae2d436fc410b0cff51042a3350ba71f54f4445/packages/outputarea/src/model.ts#L518
-                if cell_outputs and cell_outputs[-1].get("name", None) == output["name"]:
+                # Derive the authoritative merged stream from the kernel-side
+                # accumulator. The browser fallback may already have inserted
+                # this snapshot in the shared document, in which case this is
+                # intentionally a no-op rather than a second append.
+                expected_parts: list[str] = []
+                for emitted in reversed(outputs):
+                    if (
+                        emitted.get("output_type") != "stream"
+                        or emitted.get("name") != output["name"]
+                    ):
+                        break
+                    emitted_text = emitted.get("text", "")
+                    expected_parts.append(
+                        "".join(emitted_text) if isinstance(emitted_text, list) else emitted_text
+                    )
+                expected_text = "".join(reversed(expected_parts))
+
+                if cell_outputs and cell_outputs[-1].get("name") == output["name"]:
                     last_output = cell_outputs[-1]
                     previous_text = last_output["text"]
+                    actual_text = (
+                        str(previous_text)
+                        if isinstance(previous_text, Text)
+                        else "".join(previous_text)
+                        if isinstance(previous_text, list)
+                        else previous_text or ""
+                    )
+                    if actual_text == expected_text or actual_text.startswith(expected_text):
+                        return
                     if isinstance(previous_text, Text):
-                        # Text.__iadd__ owns its transaction. Nesting it in a
-                        # Doc transaction can leave updates with unresolved
-                        # dependencies in the persistent YStore.
-                        previous_text += text
+                        suffix = (
+                            expected_text[len(actual_text) :]
+                            if expected_text.startswith(actual_text)
+                            else output["text"]
+                        )
+                        previous_text += suffix
                     else:
-                        if isinstance(previous_text, list):
-                            previous_text = "".join(previous_text)
                         with cell_outputs.doc.transaction():
-                            last_output["text"] = Text((previous_text or "") + text)
+                            last_output["text"] = Text(expected_text)
                 else:
                     with cell_outputs.doc.transaction():
                         youtput = dict(output)
-                        youtput["text"] = Text(text)
-                        # A nested shared type is only integrated when its
-                        # parent is also a shared type. Appending the plain
-                        # dict would persist the Text value as null.
+                        youtput["text"] = Text(output["text"])
                         cell_outputs.append(Map(youtput))
             else:
-                with cell_outputs.doc.transaction():
-                    cell_outputs.append(output)
+                # Pending HTTP reconciliation may have inserted this complete
+                # non-stream output before the YDoc update reaches the server.
+                # Avoid persisting the same execute_result/error twice.
+                current = cell_outputs[-1] if cell_outputs else None
+                current_value = current.to_py() if hasattr(current, "to_py") else current
+                if current_value != dict(output):
+                    with cell_outputs.doc.transaction():
+                        cell_outputs.append(output)
     elif msg_type == "clear_output":
         # FIXME msg.content.wait - if true should clear at the next message
         outputs.clear()
@@ -267,6 +294,14 @@ async def _execute_snippet(
                 ycell["execution_state"] = "running"
                 if "execution" in ycell["metadata"]:
                     del ycell["metadata"]["execution"]
+                request_id = metadata.get("request_id")
+                kernel_id = metadata.get("kernel_id")
+                if request_id and kernel_id:
+                    ycell["metadata"]["jupyter_server_nbmodel"] = {
+                        "requestId": request_id,
+                        "kernelId": kernel_id,
+                        "requestUrl": f"/api/kernels/{kernel_id}/requests/{request_id}",
+                    }
                 if metadata.get("record_timing", False):
                     time_info = ycell["metadata"].get("execution", {})
                     time_info["shell.execute_reply.started"] = execution_start_time
@@ -318,6 +353,8 @@ async def _execute_snippet(
         with ycell.doc.transaction():
             ycell["execution_count"] = reply_content.get("execution_count")
             ycell["execution_state"] = "idle"
+            if "jupyter_server_nbmodel" in ycell["metadata"]:
+                del ycell["metadata"]["jupyter_server_nbmodel"]
             if metadata and metadata.get("record_timing", False):
                 if reply_content["status"] == "ok":
                     time_info["shell.execute_reply"] = execution_end_time
@@ -430,11 +467,13 @@ async def kernel_worker(
                 await client.start_channels()
             progress = {"pending": True, "outputs": []}
             results[uid] = progress
+            execution_metadata = dict(metadata or {})
+            execution_metadata.update({"request_id": uid, "kernel_id": kernel_id})
             results[uid] = await _execute_snippet(
                 client,
                 ydoc,
                 snippet,
-                metadata,
+                execution_metadata,
                 partial(_stdin_hook, kernel_id, uid, pending_input),
                 progress,
             )
