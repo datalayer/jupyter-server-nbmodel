@@ -109,6 +109,9 @@ filterwarnings = [
   "module:Jupyter is migrating its paths to use standard platformdirs:DeprecationWarning",
   # From anyio https://github.com/agronholm/anyio/pull/715
   "ignore:Unclosed <MemoryObjectSendStream:ResourceWarning",
+  # Transient stdout/stderr temp files from the kernel subprocess/provisioner.
+  "ignore:unclosed file <_io.*name='/tmp:ResourceWarning",
+  "ignore:Exception ignored in:pytest.PytestUnraisableExceptionWarning",
 ]
 
 [tool.mypy]
