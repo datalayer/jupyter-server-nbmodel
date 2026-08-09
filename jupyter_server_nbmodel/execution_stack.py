@@ -5,9 +5,10 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
+import threading
 import typing as t
 import uuid
-
 from dataclasses import asdict
 
 import jupyter_server
@@ -15,24 +16,40 @@ import jupyter_server.services
 import jupyter_server.services.kernels
 import jupyter_server.services.kernels.kernelmanager
 
-from jupyter_server_nbmodel.models import PendingInput
 from jupyter_server_nbmodel.actions import kernel_worker
 from jupyter_server_nbmodel.log import get_logger
-
+from jupyter_server_nbmodel.models import PendingInput
 
 if t.TYPE_CHECKING:
-    import jupyter_client
-    from nbformat import NotebookNode
     try:
         import jupyter_server_ydoc
-        import pycrdt as y
-        from jupyter_ydoc.ynotebook import YNotebook
     except ImportError:
         # optional dependencies
         ...
 
 
 NO_RESULT = object()
+
+
+async def _run_in_thread(callback: t.Callable[[], t.Any]) -> t.Any:
+    """Run a blocking callback on a dedicated daemon thread."""
+    result: list[t.Any] = []
+    errors: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            result.append(callback())
+        except BaseException as error:
+            errors.append(error)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    while thread.is_alive():
+        await asyncio.sleep(0.01)
+    thread.join()
+    if errors:
+        raise errors[0]
+    return result[0]
 
 
 class ExecutionStack:
@@ -53,14 +70,15 @@ class ExecutionStack:
         # Store execution results per kernelID per execution request ID
         self.__execution_results: dict[str, dict[str, t.Any]] = {}
         # Cache kernel clients
-        self.__kernel_clients: dict[str, jupyter_client.asynchronous.client.AsyncKernelClient] = {}
+        self.__kernel_clients: dict[str, t.Any] = {}
+        # Connection information for kernels hosted by a remote Jupyter server.
+        self.__remote_servers: dict[str, dict[str, str | None]] = {}
         # Store pending input per kernel ID
         self.__pending_inputs: dict[str, PendingInput] = {}
         # Store execution request parameters in order per kernel ID
         self.__tasks: dict[str, asyncio.Queue] = {}
         # Execution request queue worker per kernel ID
         self.__workers: dict[str, asyncio.Task] = {}
-
 
     def __del__(self):
         if (
@@ -74,8 +92,14 @@ class ExecutionStack:
             )
             self.dispose()
 
+    def _get_local_client(self, kernel_id: str) -> t.Any:
+        """Get or create a client managed by the local Jupyter server."""
+        if kernel_id not in self.__kernel_clients:
+            km = self.__manager.get_kernel(kernel_id)
+            self.__kernel_clients[kernel_id] = km.client()
+        return self.__kernel_clients[kernel_id]
 
-    def _get_client(self, kernel_id: str) -> jupyter_client.asynchronous.client.AsyncKernelClient:
+    async def _get_client(self, kernel_id: str) -> t.Any:
         """Get the cached kernel client for ``kernel_id``.
 
         Args:
@@ -84,11 +108,52 @@ class ExecutionStack:
             The client for the given kernel.
         """
         if kernel_id not in self.__kernel_clients:
-            km = self.__manager.get_kernel(kernel_id)
-            self.__kernel_clients[kernel_id] = km.client()
+            remote_server = self.__remote_servers.get(kernel_id)
+            if remote_server is None:
+                client = self._get_local_client(kernel_id)
+                # A newly connected IOPub SUB socket can otherwise miss the
+                # first execution messages while its subscription propagates.
+                # The readiness handshake also drains startup messages before
+                # the worker submits its first execution request.
+                await client.wait_for_ready()
+            else:
+                from jupyter_kernel_client.manager import KernelHttpManager
+
+                def create_remote_client() -> t.Any:
+                    manager = KernelHttpManager(
+                        server_url=remote_server["url"],
+                        token=remote_server.get("token"),
+                        kernel_id=kernel_id,
+                    )
+                    client = manager.client
+                    client._server_nbmodel_remote = True
+                    client.start_channels()
+                    return client
+
+                self.__kernel_clients[kernel_id] = await _run_in_thread(create_remote_client)
 
         return self.__kernel_clients[kernel_id]
 
+    async def _run_worker(self, kernel_id: str) -> None:
+        """Create the kernel client and process its execution queue."""
+        try:
+            client = await self._get_client(kernel_id)
+        except BaseException as error:
+            get_logger().error("Failed to connect to kernel %s.", kernel_id, exc_info=error)
+            queue = self.__tasks[kernel_id]
+            while not queue.empty():
+                uid, _, _ = queue.get_nowait()
+                self.__execution_results[kernel_id][uid] = {"error": str(error)}
+                queue.task_done()
+            return
+        await kernel_worker(
+            kernel_id,
+            client,
+            self.__ydoc,
+            self.__tasks[kernel_id],
+            self.__execution_results[kernel_id],
+            self.__pending_inputs[kernel_id],
+        )
 
     async def dispose(self) -> None:
         get_logger().debug("Disposing ExecutionStack…")
@@ -102,7 +167,9 @@ class ExecutionStack:
         await asyncio.wait_for(asyncio.gather(*self.__workers.values()), timeout=3)
         self.__workers.clear()
 
-        await asyncio.wait_for(asyncio.gather(*(q.join() for q in self.__tasks.values())), timeout=3)
+        await asyncio.wait_for(
+            asyncio.gather(*(q.join() for q in self.__tasks.values())), timeout=3
+        )
         self.__tasks.clear()
 
         for client in self.__kernel_clients.values():
@@ -112,8 +179,8 @@ class ExecutionStack:
             if getattr(client, "_created_context", False) and client.context:
                 client.context.destroy(linger=0)
         self.__kernel_clients.clear()
+        self.__remote_servers.clear()
         get_logger().debug("ExecutionStack has been disposed.")
-
 
     async def cancel(self, kernel_id: str, timeout: float | None = None) -> None:
         """Cancel execution for kernel ``kernel_id``.
@@ -147,6 +214,7 @@ class ExecutionStack:
                     # signaling mechanism) until GC collects the client.
                     if getattr(client, "_created_context", False) and client.context:
                         client.context.destroy(linger=0)
+                self.__remote_servers.pop(kernel_id, None)
 
     async def send_input(self, kernel_id: str, value: str) -> None:
         """Send input ``value`` to the kernel ``kernel_id``.
@@ -156,16 +224,25 @@ class ExecutionStack:
             value: Input value
         """
         try:
-            client = self._get_client(kernel_id)
+            client = await self._get_client(kernel_id)
         except KeyError as e:
             raise ValueError(f"Unable to find kernel {kernel_id}") from e
 
         # only send stdin reply if there *was not* another request
         # or execution finished while we were reading.
-        if not (await client.stdin_channel.msg_ready() or await client.shell_channel.msg_ready()):
+        stdin_ready = client.stdin_channel.msg_ready()
+        shell_ready = client.shell_channel.msg_ready()
+        if inspect.isawaitable(stdin_ready):
+            stdin_ready = await stdin_ready
+        if inspect.isawaitable(shell_ready):
+            shell_ready = await shell_ready
+        if not (stdin_ready or shell_ready):
             client.input(value)
             self.__pending_inputs[kernel_id].clear()
 
+    def is_remote(self, kernel_id: str) -> bool:
+        """Whether ``kernel_id`` is connected through a remote Jupyter server."""
+        return kernel_id in self.__remote_servers
 
     def get(self, kernel_id: str, uid: str) -> t.Any:
         """Get the request ``uid`` results, its pending input or None.
@@ -199,19 +276,28 @@ class ExecutionStack:
         else:
             return kernel_results.pop(uid)
 
-
-    def put(self, kernel_id: str, snippet: str, metadata: dict | None = None) -> str:
+    def put(
+        self,
+        kernel_id: str,
+        snippet: str,
+        metadata: dict | None = None,
+        remote_server: dict[str, str | None] | None = None,
+    ) -> str:
         """Add a asynchronous execution request.
 
         Args:
             kernel_id: Kernel ID
             snippet: Snippet to be executed
             metadata: [optional] Snippet metadata
+            remote_server: [optional] Remote Jupyter server connection
 
         Returns:
             Request identifier
         """
         uid = str(uuid.uuid4())
+
+        if remote_server is not None:
+            self.__remote_servers[kernel_id] = remote_server
 
         if kernel_id not in self.__execution_results:
             self.__execution_results[kernel_id] = {}
@@ -225,14 +311,5 @@ class ExecutionStack:
         self.__tasks[kernel_id].put_nowait((uid, snippet, metadata))
 
         if kernel_id not in self.__workers:
-            self.__workers[kernel_id] = asyncio.create_task(
-                kernel_worker(
-                    kernel_id,
-                    self._get_client(kernel_id),
-                    self.__ydoc,
-                    self.__tasks[kernel_id],
-                    self.__execution_results[kernel_id],
-                    self.__pending_inputs[kernel_id],
-                )
-            )
+            self.__workers[kernel_id] = asyncio.create_task(self._run_worker(kernel_id))
         return uid

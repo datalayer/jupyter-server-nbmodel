@@ -7,27 +7,25 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import threading
 import typing as t
-
-from functools import partial
 from datetime import datetime, timezone
+from functools import partial
 
 import nbformat
-
 from jupyter_core.utils import ensure_async
 
+from jupyter_server_nbmodel.event_logger import event_logger
+from jupyter_server_nbmodel.log import get_logger
 from jupyter_server_nbmodel.models import (
-    PendingInput,
     InputDescription,
     InputRequest,
+    PendingInput,
 )
-from jupyter_server_nbmodel.log import get_logger
-from jupyter_server_nbmodel.event_logger import event_logger
-
 
 if t.TYPE_CHECKING:
-    import jupyter_client
     from nbformat import NotebookNode
+
     try:
         import jupyter_server_ydoc
         import pycrdt as y
@@ -145,7 +143,9 @@ def _stdin_hook(kernel_id: str, request_id: str, pending_input: PendingInput, ms
             f"Execution request {kernel_id} received a input request while waiting for an input.\n{msg}"  # noqa: E501
         )
     header = msg["header"].copy()
-    header["date"] = header["date"] if isinstance(header["date"], str) else header["date"].isoformat()
+    header["date"] = (
+        header["date"] if isinstance(header["date"], str) else header["date"].isoformat()
+    )
     pending_input.request_id = request_id
     pending_input.content = InputDescription(
         parent_header=header, input_request=InputRequest(**msg["content"])
@@ -160,8 +160,56 @@ def _get_error(outputs):
     )
 
 
+def _threadsafe_hook(
+    loop: asyncio.AbstractEventLoop, callback: t.Callable[[dict], None] | None
+) -> t.Callable[[dict], None] | None:
+    """Run a synchronous remote-client hook safely on the server event loop."""
+    if callback is None:
+        return None
+
+    def hook(message: dict) -> None:
+        completed = threading.Event()
+        errors: list[BaseException] = []
+
+        def invoke() -> None:
+            try:
+                callback(message)
+            except BaseException as error:
+                errors.append(error)
+            finally:
+                completed.set()
+
+        loop.call_soon_threadsafe(invoke)
+        completed.wait()
+        if errors:
+            raise errors[0]
+
+    return hook
+
+
+async def _run_in_thread(callback: t.Callable[[], t.Any]) -> t.Any:
+    """Run a blocking callback without relying on the global asyncio executor."""
+    result: list[t.Any] = []
+    errors: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            result.append(callback())
+        except BaseException as error:
+            errors.append(error)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    while thread.is_alive():
+        await asyncio.sleep(0.01)
+    thread.join()
+    if errors:
+        raise errors[0]
+    return result[0]
+
+
 async def _execute_snippet(
-    client: jupyter_client.asynchronous.client.AsyncKernelClient,
+    client: t.Any,
     ydoc: jupyter_server_ydoc.app.YDocExtension | None,
     snippet: str,
     metadata: dict | None,
@@ -204,20 +252,33 @@ async def _execute_snippet(
                     "event_type": "execution_start",
                     "cell_id": metadata["cell_id"],
                     "document_id": metadata["document_id"],
-                    "timestamp": execution_start_time
-                }
+                    "timestamp": execution_start_time,
+                },
             )
     outputs = []
     # FIXME we don't check if the session is consistent (aka the kernel is linked to the document)
     #   - should we?
-    reply = await ensure_async(
-        client.execute_interactive(
-            snippet,
-            # FIXME stream partial results
-            output_hook=partial(_output_hook, outputs, ycell),
-            stdin_hook=stdin_hook if client.allow_stdin else None,
+    output_hook = partial(_output_hook, outputs, ycell)
+    if not getattr(client, "_server_nbmodel_remote", False):
+        reply = await ensure_async(
+            client.execute_interactive(
+                snippet,
+                output_hook=output_hook,
+                stdin_hook=stdin_hook if client.allow_stdin else None,
+            )
         )
-    )
+    else:
+        # Remote WebSocket clients are synchronous. Run their blocking receive
+        # loop in a worker thread while applying YDoc updates on the main loop.
+        loop = asyncio.get_running_loop()
+        reply = await _run_in_thread(
+            partial(
+                client.execute_interactive,
+                snippet,
+                output_hook=_threadsafe_hook(loop, output_hook),
+                stdin_hook=_threadsafe_hook(loop, stdin_hook if client.allow_stdin else None),
+            )
+        )
     reply_content = reply["content"]
     if ycell is not None:
         execution_end_time = datetime.now(timezone.utc).isoformat()[:-6]
@@ -237,10 +298,10 @@ async def _execute_snippet(
                 "event_type": "execution_end",
                 "cell_id": metadata["cell_id"],
                 "document_id": metadata["document_id"],
-                "success": reply_content["status"]=="ok",
+                "success": reply_content["status"] == "ok",
                 "kernel_error": _get_error(outputs),
-                "timestamp": execution_end_time
-            }
+                "timestamp": execution_end_time,
+            },
         )
     return {
         "status": reply_content["status"],
@@ -250,53 +311,65 @@ async def _execute_snippet(
     }
 
 
-async def dedup_task_queue(q: asyncio.Queue):
+async def dedup_task_queue(q: asyncio.Queue) -> list[str]:
     """
-    Deduplicate tasks in an asyncio.Queue by keeping only the last 
+    Deduplicate tasks in an asyncio.Queue by keeping only the last
     submitted task per cell_id.
 
     Problem:
         After "Restart Kernel and Run All Cells", tasks from the previous
         run may still remain in the queue. This causes duplicate tasks
-        for the same cell_id to exist. When consumed, both the old and 
+        for the same cell_id to exist. When consumed, both the old and
         new tasks run, leading to duplicated execution.
 
     Solution:
         This function drains the queue, keeps only the last occurrence
-        of each cell_id, and puts those tasks back into the queue in the 
+        of each cell_id, and puts those tasks back into the queue in the
         correct order. That way, each cell_id has only one pending task.
     """
     if q.empty():
-        return
+        return []
 
-    # Drain the queue into a list
     items = []
-    while not q.empty():
-        items.append(await q.get())
+    while True:
+        try:
+            items.append(q.get_nowait())
+        except asyncio.QueueEmpty:
+            break
 
-    # Track last occurrence index of each cell_id
-    last_idx = {}
+    # Keep items without cell_id and only the latest one for duplicated cell_id.
+    last_idx: dict[str, int] = {}
     for i, item in enumerate(items):
-        cell_id = item[2]["cell_id"]
-        last_idx[cell_id] = i
+        metadata = item[2] if len(item) > 2 else None
+        cell_id = metadata.get("cell_id") if isinstance(metadata, dict) else None
+        if isinstance(cell_id, str):
+            last_idx[cell_id] = i
 
-    # Collect items in the order of last appearances
-    keep = []
-    seen = set()
+    keep_indices: set[int] = set()
     for i, item in enumerate(items):
-        cell_id = item[2]["cell_id"]
-        if i == last_idx[cell_id] and cell_id not in seen:
-            keep.append(item)
-            seen.add(cell_id)
+        metadata = item[2] if len(item) > 2 else None
+        cell_id = metadata.get("cell_id") if isinstance(metadata, dict) else None
+        if isinstance(cell_id, str):
+            if last_idx.get(cell_id) == i:
+                keep_indices.add(i)
+        else:
+            keep_indices.add(i)
 
-    # Put back only the deduplicated items
-    for item in keep:
-        await q.put(item)
+    dropped_uids: list[str] = []
+    for i, item in enumerate(items):
+        # Balance the original put before optionally re-queuing the item.
+        q.task_done()
+        if i in keep_indices:
+            await q.put(item)
+        else:
+            dropped_uids.append(item[0])
+
+    return dropped_uids
 
 
 async def kernel_worker(
     kernel_id: str,
-    client: jupyter_client.asynchronous.client.AsyncKernelClient,
+    client: t.Any,
     ydoc: jupyter_server_ydoc.app.YDocExtension | None,
     queue: asyncio.Queue,
     results: dict,
@@ -306,46 +379,56 @@ async def kernel_worker(
     get_logger().debug(f"Starting worker to process execution requests of kernel {kernel_id}…")
     to_raise = None
     while True:
+        uid = None
         try:
             uid, snippet, metadata = await queue.get()
-            await dedup_task_queue(queue)
+            for dropped_uid in await dedup_task_queue(queue):
+                results[dropped_uid] = {
+                    "error": "Superseded by a newer queued execution for the same cell_id."
+                }
             get_logger().debug(f"Processing execution request {uid} for kernel {kernel_id}…")
             get_logger().debug("%s %s %s", uid, snippet, metadata)
-            client.session.session = uid
             # FIXME
             # client.session.username = username
             from jupyter_server.gateway.managers import GatewayKernelClient
+
             if isinstance(client, GatewayKernelClient) and client.channel_socket is None:
                 get_logger().debug(f"start channels {kernel_id}")
                 await client.start_channels()
             results[uid] = await _execute_snippet(
                 client, ydoc, snippet, metadata, partial(_stdin_hook, kernel_id, uid, pending_input)
             )
-            queue.task_done()
             get_logger().debug(f"Execution request {uid} processed for kernel {kernel_id}.")
 
             # stop other tasks if one hits error
-            if results[uid]['status'] == 'error':
+            if results[uid]["status"] == "error":
                 while not queue.empty():
-                    queue.get_nowait()
+                    dropped_uid, _, _ = queue.get_nowait()
+                    results[dropped_uid] = {
+                        "error": "Execution cancelled because a previous queued request failed."
+                    }
                     queue.task_done()
         except (asyncio.CancelledError, KeyboardInterrupt, RuntimeError) as e:
-            results[uid] = {"error": str(e)}
+            if uid is not None:
+                results[uid] = {"error": str(e)}
             get_logger().debug(
                 f"Stopping execution requests worker for kernel {kernel_id}…", exc_info=e
             )
             # Empty the queue
             while not queue.empty():
-                queue.get_nowait()
+                dropped_uid, _, _ = queue.get_nowait()
+                results[dropped_uid] = {"error": "Execution cancelled."}
                 queue.task_done()
             to_raise = e
             break
         except BaseException as e:
+            if uid is not None:
+                results[uid] = {"error": str(e)}
             get_logger().error(
                 f"Failed to process execution request {uid} for kernel {kernel_id}.", exc_info=e
             )
-            if not queue.empty():
-                queue.get_nowait()
+        finally:
+            if uid is not None:
                 queue.task_done()
     if to_raise is not None:
         raise to_raise

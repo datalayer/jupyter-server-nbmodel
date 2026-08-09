@@ -97,10 +97,20 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
           const cellId = cell.model.sharedModel.getId();
           const documentId = notebook.sharedModel.getState('document_id');
           const { recordTiming } = notebookConfig;
+          const kernelSettings = sessionContext.session?.kernel?.serverSettings;
+          const remoteServer =
+            kernelSettings &&
+            kernelSettings.baseUrl !== this._serverSettings.baseUrl
+              ? {
+                  url: kernelSettings.baseUrl,
+                  token: kernelSettings.token
+                }
+              : undefined;
           const init = {
             method: 'POST',
             body: JSON.stringify({
               code,
+              server: remoteServer,
               metadata: {
                 cell_id: cellId,
                 document_id: documentId,

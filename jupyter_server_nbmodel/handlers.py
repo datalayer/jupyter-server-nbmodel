@@ -6,16 +6,14 @@ from __future__ import annotations
 
 import json
 import typing as t
-
 from http import HTTPStatus
 
 import tornado
-
 from jupyter_server.base.handlers import APIHandler
 from jupyter_server.extension.handler import ExtensionHandlerMixin
 
-from jupyter_server_nbmodel.log import get_logger
 from jupyter_server_nbmodel.execution_stack import ExecutionStack
+from jupyter_server_nbmodel.log import get_logger
 
 
 class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
@@ -30,7 +28,6 @@ class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
     ) -> None:
         super().initialize(name, *args, **kwargs)
         self._execution_stack = execution_stack
-
 
     @tornado.web.authenticated
     async def post(self, kernel_id: str) -> None:
@@ -50,12 +47,29 @@ class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
 
         snippet = body.get("code")
         metadata = body.get("metadata", {})
+        remote_server = body.get("server")
 
-        if kernel_id not in self.kernel_manager:
+        if remote_server is not None:
+            if (
+                not isinstance(remote_server, dict)
+                or not isinstance(remote_server.get("url"), str)
+                or not remote_server["url"].startswith(("http://", "https://"))
+            ):
+                raise tornado.web.HTTPError(
+                    status_code=HTTPStatus.BAD_REQUEST,
+                    reason="Invalid remote Jupyter server connection.",
+                )
+            token = remote_server.get("token")
+            if token is not None and not isinstance(token, str):
+                raise tornado.web.HTTPError(
+                    status_code=HTTPStatus.BAD_REQUEST,
+                    reason="Invalid remote Jupyter server token.",
+                )
+        elif kernel_id not in self.kernel_manager:
             msg = f"Unknown kernel with id: {kernel_id}"
             get_logger().error(msg)
             raise tornado.web.HTTPError(status_code=HTTPStatus.NOT_FOUND, reason=msg)
-        uid = self._execution_stack.put(kernel_id, snippet, metadata)
+        uid = self._execution_stack.put(kernel_id, snippet, metadata, remote_server=remote_server)
         self.set_status(HTTPStatus.ACCEPTED)
         self.set_header("Location", f"/api/kernels/{kernel_id}/requests/{uid}")
         self.finish("{}")
@@ -81,7 +95,7 @@ class InputHandler(ExtensionHandlerMixin, APIHandler):
         Json Body Required:
             input (str): Input value
         """
-        if kernel_id not in self.kernel_manager:
+        if kernel_id not in self.kernel_manager and not self._stack.is_remote(kernel_id):
             msg = f"Unknown kernel with id: {kernel_id}"
             get_logger().error(msg)
             raise tornado.web.HTTPError(status_code=HTTPStatus.NOT_FOUND, reason=msg)

@@ -169,7 +169,7 @@ HTML('<p><b>Jupyter</b> rocks.</p>')""",
         )
     ),
 )
-async def test_post_execute_wiht_ycell(jp_fetch, pending_kernel_is_ready, snippet, output, rtc_test_notebook):
+async def test_post_execute_with_ycell(jp_fetch, pending_kernel_is_ready, snippet, output, rtc_test_notebook):
     r = await jp_fetch(
         "api", "kernels", method="POST", body=json.dumps({"name": NATIVE_KERNEL_NAME})
     )
