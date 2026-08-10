@@ -6,13 +6,14 @@ import asyncio
 import datetime
 import json
 import re
-import nbformat
 
+import nbformat
 import pytest
-from jupyter_client.kernelspec import NATIVE_KERNEL_NAME
 from jupyter_client.asynchronous.client import AsyncKernelClient
-from jupyter_server_nbmodel.models import PendingInput
+from jupyter_client.kernelspec import NATIVE_KERNEL_NAME
+
 from jupyter_server_nbmodel.actions import kernel_worker
+from jupyter_server_nbmodel.models import PendingInput
 
 TEST_TIMEOUT = 15
 
@@ -98,12 +99,13 @@ def rtc_test_notebook(jp_serverapp, rtc_create_notebook):
         assert path == returned_path
         document_id = get_document_id(jp_serverapp, "test.ipynb")
         return document_id
+
     return _
 
 
 def get_document_id(jp_serverapp, notebook_name):
     fim = jp_serverapp.web_app.settings["file_id_manager"]
-    document_id = f'json:notebook:{fim.get_id(notebook_name)}'
+    document_id = f"json:notebook:{fim.get_id(notebook_name)}"
     return document_id
 
 
@@ -146,13 +148,136 @@ async def test_post_execute_no_ycell(jp_fetch, pending_kernel_is_ready, snippet,
     await asyncio.sleep(1)
 
 
+@pytest.mark.timeout(TEST_TIMEOUT)
+async def test_pending_execute_returns_stream_outputs(
+    jp_fetch,
+    pending_kernel_is_ready,
+    rtc_test_notebook,
+    jp_serverapp,
+):
+    """Pending request polling exposes output before execution completes."""
+    snippet = (
+        "import time\n"
+        "print('streamed before completion', flush=True)\n"
+        "time.sleep(1.5)\n"
+        "print('completed', flush=True)"
+    )
+    notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell(source=snippet)])
+    document_id = await rtc_test_notebook(notebook)
+    cell_id = notebook["cells"][0]["id"]
+    response = await jp_fetch(
+        "api", "kernels", method="POST", body=json.dumps({"name": NATIVE_KERNEL_NAME})
+    )
+    kernel = json.loads(response.body.decode())
+    await pending_kernel_is_ready(kernel["id"])
+
+    response = await jp_fetch(
+        "api",
+        "kernels",
+        kernel["id"],
+        "execute",
+        method="POST",
+        body=json.dumps(
+            {
+                "code": snippet,
+                "metadata": {
+                    "cell_id": cell_id,
+                    "document_id": document_id,
+                    "document_path": "test.ipynb",
+                },
+            }
+        ),
+    )
+    assert response.code == 202
+    location = response.headers["Location"]
+    accepted = json.loads(response.body)
+    request_id = location.rsplit("/", 1)[-1]
+    assert accepted == {
+        "request_id": request_id,
+        "kernel_id": kernel["id"],
+        "cell_id": cell_id,
+        "document_path": "test.ipynb",
+        "pending": True,
+        "request_status": "queued",
+        "request_url": location,
+        "outputs": "[]",
+    }
+
+    pending_outputs = []
+    for _ in range(10):
+        await asyncio.sleep(0.1)
+        response = await jp_fetch(location, raise_error=False)
+        assert response.code == 202, "Execution completed before its stream was observed."
+        payload = json.loads(response.body)
+        assert payload["request_id"] == request_id
+        assert payload["kernel_id"] == kernel["id"]
+        assert payload["request_url"] == location
+        assert payload["pending"] is True
+        assert payload["request_status"] in {"queued", "running"}
+        if "outputs" in payload:
+            pending_outputs = json.loads(payload["outputs"])
+        if pending_outputs:
+            break
+
+    assert pending_outputs == [
+        {
+            "output_type": "stream",
+            "name": "stdout",
+            "text": "streamed before completion\n",
+        }
+    ]
+    response = await jp_fetch("api", "kernels", kernel["id"], "execute")
+    assert response.code == 200
+    active = json.loads(response.body)
+    assert active["kernel_id"] == kernel["id"]
+    assert active["requests"] == [
+        {
+            "request_id": request_id,
+            "kernel_id": kernel["id"],
+            "request_url": location,
+            "cell_id": cell_id,
+            "document_path": "test.ipynb",
+            "pending": True,
+            "request_status": "running",
+            "outputs": json.dumps(pending_outputs),
+        }
+    ]
+    collaboration = jp_serverapp.web_app.settings["jupyter_server_ydoc"]
+    document = await collaboration.get_document(
+        path="test.ipynb", content_type="notebook", file_format="json", copy=False
+    )
+    assert document.get()["cells"][0]["metadata"]["jupyter_server_nbmodel"] == {
+        "requestId": request_id,
+        "kernelId": kernel["id"],
+        "requestUrl": location,
+    }
+
+    response = await _wait_request(jp_fetch, location)
+    assert response.code == 200
+    final_payload = json.loads(response.body)
+    assert final_payload["request_id"] == request_id
+    assert final_payload["kernel_id"] == kernel["id"]
+    assert final_payload["request_url"] == location
+    assert final_payload["pending"] is False
+    assert final_payload["request_status"] == "complete"
+    final_outputs = json.loads(final_payload["outputs"])
+    assert "".join(output["text"] for output in final_outputs) == (
+        "streamed before completion\ncompleted\n"
+    )
+    assert "jupyter_server_nbmodel" not in document.get()["cells"][0]["metadata"]
+
+    response = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
+    assert response.code == 204
+    await asyncio.sleep(1)
+
+
 @pytest.mark.timeout(2 * TEST_TIMEOUT)
 @pytest.mark.parametrize(
     "snippet,output",
     (
         (
             "print('hello buddy')",
-            '{"output_type": "stream", "name": "stdout", "text": ["hello buddy"]}',
+            '{"output_type": "stream", "name": "stdout", "text": "hello buddy\\n"}',
         ),
         ("a = 1", ""),
         (
@@ -161,24 +286,24 @@ HTML('<p><b>Jupyter</b> rocks.</p>')""",
             '{"output_type": "execute_result", "metadata": {}, "data": {"text/plain": "<IPython.core.display.HTML object>", "text/html": "<p><b>Jupyter</b> rocks.</p>"}, "execution_count": 1}',  # noqa: E501
         ),
         (
-          "display('a'); print('b')",
-          (
-            '{"output_type": "display_data", "metadata": {}, "data": {"text/plain": "\'a\'"}}'
-            ', {"output_type": "stream", "name": "stdout", "text": ["b"]}'
-          )
-        )
+            "display('a'); print('b')",
+            (
+                '{"output_type": "display_data", "metadata": {}, "data": {"text/plain": "\'a\'"}}'
+                ', {"output_type": "stream", "name": "stdout", "text": "b\\n"}'
+            ),
+        ),
     ),
 )
-async def test_post_execute_with_ycell(jp_fetch, pending_kernel_is_ready, snippet, output, rtc_test_notebook):
+async def test_post_execute_with_ycell(
+    jp_fetch, pending_kernel_is_ready, snippet, output, rtc_test_notebook
+):
     r = await jp_fetch(
         "api", "kernels", method="POST", body=json.dumps({"name": NATIVE_KERNEL_NAME})
     )
     kernel = json.loads(r.body.decode())
     await pending_kernel_is_ready(kernel["id"])
 
-    nb = nbformat.v4.new_notebook(
-        cells=[nbformat.v4.new_code_cell(source=snippet)]
-    )
+    nb = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell(source=snippet)])
     document_id = await rtc_test_notebook(nb)
     cell_id = nb["cells"][0]["id"]
 
@@ -191,13 +316,18 @@ async def test_post_execute_with_ycell(jp_fetch, pending_kernel_is_ready, snippe
         timeout=2 * TEST_TIMEOUT,
         retries=1,
         method="POST",
-        body=json.dumps({
-            "code": snippet,
-            "metadata": {
-                "cell_id": cell_id,
-                "document_id": document_id
+        body=json.dumps(
+            {
+                "code": snippet,
+                "metadata": {
+                    "cell_id": cell_id,
+                    # A restored notebook can retain a room ID from before the
+                    # server restart. The path must select the active room.
+                    "document_id": f"{document_id}-stale",
+                    "document_path": "test.ipynb",
+                },
             }
-        }),
+        ),
     )
 
     assert response.code == 200
@@ -226,8 +356,8 @@ async def test_post_execute_with_ycell(jp_fetch, pending_kernel_is_ready, snippe
                     "---------------------------------------------------------------------------",
                     "ZeroDivisionError                         Traceback (most recent call last)",
                     "Cell In[1], line 1\n----> 1 1 / 0\n",
-                    "ZeroDivisionError: division by zero"
-                ]
+                    "ZeroDivisionError: division by zero",
+                ],
             },
         ),
     ),
@@ -253,17 +383,13 @@ async def test_post_erroneous_execute(jp_fetch, pending_kernel_is_ready, snippet
     assert response.code == 200
     payload = json.loads(response.body)
     outputs = payload["outputs"]
-    del payload["outputs"]
-    assert payload == {
-        "status": "error",
-        "execution_count": 1
-    }
+    assert payload["status"] == "error"
+    assert payload["execution_count"] == 1
+    assert payload["pending"] is False
+    assert payload["request_status"] == "complete"
     outputs = json.loads(outputs)
     for output in outputs:
-        output["traceback"] = [
-            strip_ansi(line)
-            for line in output["traceback"]
-        ]
+        output["traceback"] = [strip_ansi(line) for line in output["traceback"]]
 
     assert outputs == [output]
 
@@ -276,8 +402,9 @@ async def test_post_erroneous_execute(jp_fetch, pending_kernel_is_ready, snippet
 @pytest.mark.asyncio
 async def test_kernel_worker_reports_error(monkeypatch):
     # Patch _execute_snippet to raise an error
-    async def fake_execute(client, ydoc, snippet, metadata, stdin_hook):
+    async def fake_execute(client, ydoc, snippet, metadata, stdin_hook, progress=None):
         raise RuntimeError("simulated failure")
+
     monkeypatch.setattr(
         "jupyter_server_nbmodel.actions._execute_snippet",
         fake_execute,
@@ -314,7 +441,13 @@ async def test_kernel_worker_reports_error(monkeypatch):
 
 
 @pytest.mark.timeout(TEST_TIMEOUT)
-async def test_execution_timing_metadata(jp_root_dir, jp_fetch, pending_kernel_is_ready, rtc_test_notebook, jp_serverapp):
+async def test_execution_timing_metadata(
+    jp_root_dir,
+    jp_fetch,
+    pending_kernel_is_ready,
+    rtc_test_notebook,
+    jp_serverapp,
+):
     snippet = "a = 1"
     nb = nbformat.v4.new_notebook(
         cells=[nbformat.v4.new_code_cell(source=snippet, execution_count=1)]
@@ -337,14 +470,12 @@ async def test_execution_timing_metadata(jp_root_dir, jp_fetch, pending_kernel_i
         kernel["id"],
         "execute",
         method="POST",
-        body=json.dumps({
-            "code": snippet,
-            "metadata": {
-                "cell_id": cell_id,
-                "document_id": document_id,
-                "record_timing": True
+        body=json.dumps(
+            {
+                "code": snippet,
+                "metadata": {"cell_id": cell_id, "document_id": document_id, "record_timing": True},
             }
-        }),
+        ),
     )
     assert response.code == 200
 
@@ -352,15 +483,17 @@ async def test_execution_timing_metadata(jp_root_dir, jp_fetch, pending_kernel_i
         path=path, content_type="notebook", file_format="json", copy=False
     )
     cell_data = document.get()["cells"][0]
-    assert 'execution' in cell_data['metadata'], "'execution' does not exist in 'metadata'"
+    assert "execution" in cell_data["metadata"], "'execution' does not exist in 'metadata'"
 
     # Assert that start and end time exist in 'execution'
-    execution = cell_data['metadata']['execution']
-    assert 'shell.execute_reply.started' in execution, "'shell.execute_reply.started' does not exist in 'execution'"
-    assert 'shell.execute_reply' in execution, "'shell.execute_reply' does not exist in 'execution'"
+    execution = cell_data["metadata"]["execution"]
+    assert "shell.execute_reply.started" in execution, (
+        "'shell.execute_reply.started' does not exist in 'execution'"
+    )
+    assert "shell.execute_reply" in execution, "'shell.execute_reply' does not exist in 'execution'"
 
-    started_time = execution['shell.execute_reply.started']
-    reply_time = execution['shell.execute_reply']
+    started_time = execution["shell.execute_reply.started"]
+    reply_time = execution["shell.execute_reply"]
 
     # Match jupyter_client UTC serialization (isoformat with Z).
     assert started_time.endswith("Z"), started_time
@@ -415,11 +548,18 @@ async def test_post_input_execute(jp_fetch, pending_kernel_is_ready):
     response4 = await _wait_request(jp_fetch, location)
     assert response4.code == 200
     payload2 = json.loads(response4.body)
-    assert payload2 == {
-        "status": "ok",
-        "execution_count": 1,
-        "outputs": '[{"output_type": "execute_result", "metadata": {}, "data": {"text/plain": "\'42\'"}, "execution_count": 1}]',  # noqa: E501
-    }
+    assert payload2["status"] == "ok"
+    assert payload2["execution_count"] == 1
+    assert payload2["pending"] is False
+    assert payload2["request_status"] == "complete"
+    assert json.loads(payload2["outputs"]) == [
+        {
+            "output_type": "execute_result",
+            "metadata": {},
+            "data": {"text/plain": "'42'"},
+            "execution_count": 1,
+        }
+    ]
 
     r2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
     assert r2.code == 204

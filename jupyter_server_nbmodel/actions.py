@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import threading
 import typing as t
 from datetime import datetime, timezone
@@ -44,7 +43,7 @@ async def _get_ycell(
 
     Args:
         ydoc: The YDoc jupyter server extension
-        metadata: Execution context
+        metadata: Execution context, including the notebook path and cell ID
     Returns:
         The cell
     """
@@ -53,16 +52,30 @@ async def _get_ycell(
         get_logger().warning(msg)
         return None
     document_id = metadata.get("document_id")
+    document_path = metadata.get("document_path")
     cell_id = metadata.get("cell_id")
-    if document_id is None or cell_id is None:
+    if (document_id is None and document_path is None) or cell_id is None:
         msg = (
-            "document_id and cell_id not defined. The outputs won't be written within the document."
+            "Neither document_path nor document_id is defined with cell_id. "
+            "The outputs won't be written within the document."
         )
         get_logger().debug(msg)
         return None
-    notebook: YNotebook | None = await ydoc.get_document(room_id=document_id, copy=False)
+    notebook: YNotebook | None = None
+    if isinstance(document_path, str) and document_path:
+        # The document_id is collaborative state and may refer to a room from
+        # before a server restart. Resolve the current live room from the file
+        # path first so updates reach the browser that is actually connected.
+        notebook = await ydoc.get_document(
+            path=document_path,
+            content_type="notebook",
+            file_format="json",
+            copy=False,
+        )
+    if notebook is None and document_id is not None:
+        notebook = await ydoc.get_document(room_id=document_id, copy=False)
     if notebook is None:
-        msg = f"Document with ID {document_id} not found."
+        msg = f"Document at path {document_path!r} with ID {document_id!r} not found."
         get_logger().warning(msg)
         return None
     ycells = filter(lambda c: c["id"] == cell_id, notebook.ycells)
@@ -100,21 +113,61 @@ def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) ->
         if ycell is not None:
             cell_outputs = ycell["outputs"]
             if msg_type == "stream":
-                with cell_outputs.doc.transaction():
-                    text = output["text"]
-                    # FIXME Logic is quite complex at https://github.com/jupyterlab/jupyterlab/blob/7ae2d436fc410b0cff51042a3350ba71f54f4445/packages/outputarea/src/model.ts#L518
-                    if text.endswith((os.linesep, "\n")):
-                        text = text[:-1]
-                    if (not cell_outputs) or (cell_outputs[-1].get("name", None) != output["name"]):
-                        output["text"] = [text]
-                        cell_outputs.append(output)
+                from pycrdt import Map, Text
+
+                # Derive the authoritative merged stream from the kernel-side
+                # accumulator. The browser fallback may already have inserted
+                # this snapshot in the shared document, in which case this is
+                # intentionally a no-op rather than a second append.
+                expected_parts: list[str] = []
+                for emitted in reversed(outputs):
+                    if (
+                        emitted.get("output_type") != "stream"
+                        or emitted.get("name") != output["name"]
+                    ):
+                        break
+                    emitted_text = emitted.get("text", "")
+                    expected_parts.append(
+                        "".join(emitted_text) if isinstance(emitted_text, list) else emitted_text
+                    )
+                expected_text = "".join(reversed(expected_parts))
+
+                if cell_outputs and cell_outputs[-1].get("name") == output["name"]:
+                    last_output = cell_outputs[-1]
+                    previous_text = last_output["text"]
+                    actual_text = (
+                        str(previous_text)
+                        if isinstance(previous_text, Text)
+                        else "".join(previous_text)
+                        if isinstance(previous_text, list)
+                        else previous_text or ""
+                    )
+                    if actual_text == expected_text or actual_text.startswith(expected_text):
+                        return
+                    if isinstance(previous_text, Text):
+                        suffix = (
+                            expected_text[len(actual_text) :]
+                            if expected_text.startswith(actual_text)
+                            else output["text"]
+                        )
+                        previous_text += suffix
                     else:
-                        last_output = cell_outputs[-1]
-                        last_output["text"].append(text)
-                        cell_outputs[-1] = last_output
+                        with cell_outputs.doc.transaction():
+                            last_output["text"] = Text(expected_text)
+                else:
+                    with cell_outputs.doc.transaction():
+                        youtput = dict(output)
+                        youtput["text"] = Text(output["text"])
+                        cell_outputs.append(Map(youtput))
             else:
-                with cell_outputs.doc.transaction():
-                    cell_outputs.append(output)
+                # Pending HTTP reconciliation may have inserted this complete
+                # non-stream output before the YDoc update reaches the server.
+                # Avoid persisting the same execute_result/error twice.
+                current = cell_outputs[-1] if cell_outputs else None
+                current_value = current.to_py() if hasattr(current, "to_py") else current
+                if current_value != dict(output):
+                    with cell_outputs.doc.transaction():
+                        cell_outputs.append(output)
     elif msg_type == "clear_output":
         # FIXME msg.content.wait - if true should clear at the next message
         outputs.clear()
@@ -214,6 +267,7 @@ async def _execute_snippet(
     snippet: str,
     metadata: dict | None,
     stdin_hook: t.Callable[[dict], None] | None,
+    progress: dict[str, t.Any] | None = None,
 ) -> dict[str, t.Any]:
     """Snippet executor
 
@@ -223,6 +277,7 @@ async def _execute_snippet(
         snippet: The code snippet to execute
         metadata: The code snippet metadata; e.g. to define the snippet context
         stdin_hook: The stdin message callback
+        progress: Mutable execution progress exposed by the request status endpoint
     Returns:
         The execution status and outputs.
     """
@@ -239,6 +294,14 @@ async def _execute_snippet(
                 ycell["execution_state"] = "running"
                 if "execution" in ycell["metadata"]:
                     del ycell["metadata"]["execution"]
+                request_id = metadata.get("request_id")
+                kernel_id = metadata.get("kernel_id")
+                if request_id and kernel_id:
+                    ycell["metadata"]["jupyter_server_nbmodel"] = {
+                        "requestId": request_id,
+                        "kernelId": kernel_id,
+                        "requestUrl": f"/api/kernels/{kernel_id}/requests/{request_id}",
+                    }
                 if metadata.get("record_timing", False):
                     time_info = ycell["metadata"].get("execution", {})
                     time_info["shell.execute_reply.started"] = execution_start_time
@@ -256,6 +319,11 @@ async def _execute_snippet(
                 },
             )
     outputs = []
+    if progress is not None:
+        # Keep the same list throughout execution so every output hook is
+        # immediately visible to request polling without copying kernel
+        # messages or waiting for the final execute reply.
+        progress["outputs"] = outputs
     # FIXME we don't check if the session is consistent (aka the kernel is linked to the document)
     #   - should we?
     output_hook = partial(_output_hook, outputs, ycell)
@@ -285,6 +353,8 @@ async def _execute_snippet(
         with ycell.doc.transaction():
             ycell["execution_count"] = reply_content.get("execution_count")
             ycell["execution_state"] = "idle"
+            if "jupyter_server_nbmodel" in ycell["metadata"]:
+                del ycell["metadata"]["jupyter_server_nbmodel"]
             if metadata and metadata.get("record_timing", False):
                 if reply_content["status"] == "ok":
                     time_info["shell.execute_reply"] = execution_end_time
@@ -395,8 +465,17 @@ async def kernel_worker(
             if isinstance(client, GatewayKernelClient) and client.channel_socket is None:
                 get_logger().debug(f"start channels {kernel_id}")
                 await client.start_channels()
+            progress = {"pending": True, "outputs": []}
+            results[uid] = progress
+            execution_metadata = dict(metadata or {})
+            execution_metadata.update({"request_id": uid, "kernel_id": kernel_id})
             results[uid] = await _execute_snippet(
-                client, ydoc, snippet, metadata, partial(_stdin_hook, kernel_id, uid, pending_input)
+                client,
+                ydoc,
+                snippet,
+                execution_metadata,
+                partial(_stdin_hook, kernel_id, uid, pending_input),
+                progress,
             )
             get_logger().debug(f"Execution request {uid} processed for kernel {kernel_id}.")
 

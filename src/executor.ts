@@ -11,6 +11,9 @@ import type { ICodeCellModel, MarkdownCell } from '@jupyterlab/cells';
 import { INotebookCellExecutor } from '@jupyterlab/notebook';
 import { ServerConnection } from '@jupyterlab/services';
 import { nullTranslator } from '@jupyterlab/translation';
+import { JSONExt } from '@lumino/coreutils';
+import { clearServerExecutionMetadata } from './executionMetadata';
+import { normalizeServerOutputs } from './outputReconciliation';
 import { requestServer } from './requestServer';
 
 /**
@@ -96,6 +99,7 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
           const code = cell.model.sharedModel.getSource();
           const cellId = cell.model.sharedModel.getId();
           const documentId = notebook.sharedModel.getState('document_id');
+          const documentPath = sessionContext.session?.path;
           const { recordTiming } = notebookConfig;
           const kernelSettings = sessionContext.session?.kernel?.serverSettings;
           const remoteServer =
@@ -114,11 +118,29 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
               metadata: {
                 cell_id: cellId,
                 document_id: documentId,
+                document_path: documentPath,
                 record_timing: recordTiming
               }
             })
           };
           onCellExecutionScheduled({ cell });
+          const sharedCodeCell = (cell.model as ICodeCellModel).sharedModel;
+          let sharedModelUpdates = 0;
+          const onSharedModelChanged = (): void => {
+            sharedModelUpdates += 1;
+            if (sharedModelUpdates <= 3) {
+              console.debug(
+                '[jupyter-server-nbmodel] Received shared cell update',
+                {
+                  cellId,
+                  documentId,
+                  documentPath,
+                  sharedModelUpdates
+                }
+              );
+            }
+          };
+          sharedCodeCell.changed.connect(onSharedModelChanged);
           let success = false;
           try {
             // FIXME quid of deletedCells and timing record.
@@ -131,6 +153,51 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
             );
             const data = await response.json();
             success = data['status'] === 'ok';
+            clearServerExecutionMetadata(cell as CodeCell);
+
+            const serverOutputs = normalizeServerOutputs(
+              data['outputs'] ?? '[]'
+            );
+            const sharedOutputs = sharedCodeCell.getOutputs();
+            const executionCount = data['execution_count'] ?? null;
+            const outputsMissing = !JSONExt.deepEqual(
+              sharedOutputs,
+              serverOutputs
+            );
+            const executionCountMissing =
+              sharedCodeCell.execution_count !== executionCount;
+
+            console.debug('[jupyter-server-nbmodel] Execution completed', {
+              cellId,
+              documentId,
+              documentPath,
+              sharedModelUpdates,
+              serverOutputCount: serverOutputs.length,
+              sharedOutputCount: sharedOutputs.length,
+              outputsMissing,
+              executionCountMissing
+            });
+
+            // Server-side collaboration is the streaming path. If its update
+            // was unavailable (no collaboration extension) or could not be
+            // integrated (for example an invalid historical YStore), reconcile
+            // the completed result returned by the REST endpoint in the client.
+            if (outputsMissing || executionCountMissing) {
+              console.warn(
+                '[jupyter-server-nbmodel] Reconciling missing server execution update',
+                {
+                  cellId,
+                  documentId,
+                  documentPath,
+                  sharedModelUpdates,
+                  outputsMissing,
+                  executionCountMissing
+                }
+              );
+              sharedCodeCell.setOutputs(serverOutputs);
+              sharedCodeCell.execution_count = executionCount;
+              sharedCodeCell.executionState = 'idle';
+            }
           } catch (error: unknown) {
             onCellExecuted({
               cell,
@@ -141,6 +208,8 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
             } else {
               throw error;
             }
+          } finally {
+            sharedCodeCell.changed.disconnect(onSharedModelChanged);
           }
           onCellExecuted({ cell, success });
           return true;
@@ -153,6 +222,45 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
         break;
     }
     return Promise.resolve(true);
+  }
+}
+
+/**
+ * Resume polling an execution request persisted in cell metadata.
+ */
+export async function resumeCellServerExecution(
+  cell: CodeCell,
+  requestUrl: string,
+  serverSettings: ServerConnection.ISettings
+): Promise<boolean> {
+  const sharedCodeCell = (cell.model as ICodeCellModel).sharedModel;
+  sharedCodeCell.executionState = 'running';
+  try {
+    const response = await requestServer(
+      cell,
+      requestUrl,
+      { method: 'GET' },
+      serverSettings
+    );
+    const data = await response.json();
+    const serverOutputs = normalizeServerOutputs(data['outputs'] ?? '[]');
+    if (!JSONExt.deepEqual(sharedCodeCell.getOutputs(), serverOutputs)) {
+      sharedCodeCell.setOutputs(serverOutputs);
+    }
+    sharedCodeCell.execution_count = data['execution_count'] ?? null;
+    sharedCodeCell.executionState = 'idle';
+    clearServerExecutionMetadata(cell);
+    return data['status'] === 'ok';
+  } catch (error) {
+    if (
+      error instanceof ServerConnection.ResponseError &&
+      error.response.status === 404
+    ) {
+      clearServerExecutionMetadata(cell);
+      sharedCodeCell.executionState = 'idle';
+      return false;
+    }
+    throw error;
   }
 }
 

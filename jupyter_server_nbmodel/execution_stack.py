@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import threading
 import typing as t
 import uuid
@@ -69,6 +70,9 @@ class ExecutionStack:
         self.__ydoc = ydoc_extension
         # Store execution results per kernelID per execution request ID
         self.__execution_results: dict[str, dict[str, t.Any]] = {}
+        # Keep request metadata until its result is consumed so every response
+        # can describe the request restored from notebook cell metadata.
+        self.__execution_metadata: dict[str, dict[str, dict | None]] = {}
         # Cache kernel clients
         self.__kernel_clients: dict[str, t.Any] = {}
         # Connection information for kernels hosted by a remote Jupyter server.
@@ -180,6 +184,7 @@ class ExecutionStack:
                 client.context.destroy(linger=0)
         self.__kernel_clients.clear()
         self.__remote_servers.clear()
+        self.__execution_metadata.clear()
         get_logger().debug("ExecutionStack has been disposed.")
 
     async def cancel(self, kernel_id: str, timeout: float | None = None) -> None:
@@ -261,6 +266,17 @@ class ExecutionStack:
         if uid not in kernel_results:
             raise ValueError(f"Execution request {uid} for kernel {kernel_id} does not exists.")
 
+        metadata = self.__execution_metadata.get(kernel_id, {}).get(uid)
+        request_context = {
+            "request_id": uid,
+            "kernel_id": kernel_id,
+            "request_url": f"/api/kernels/{kernel_id}/requests/{uid}",
+            "cell_id": metadata.get("cell_id") if isinstance(metadata, dict) else None,
+            "document_path": (
+                metadata.get("document_path") if isinstance(metadata, dict) else None
+            ),
+        }
+
         if self.__pending_inputs[kernel_id].is_pending():
             get_logger().info(f"Kernel '{kernel_id}' has a pending input.")
             # Check the request id is the one matching the appearance of the input
@@ -268,13 +284,65 @@ class ExecutionStack:
             # pending input
             input_ = self.__pending_inputs[kernel_id]
             if uid == input_.request_id:
-                return asdict(input_.content)
+                return {
+                    **asdict(input_.content),
+                    **request_context,
+                    "pending": True,
+                    "request_status": "input",
+                }
 
         result = kernel_results[uid]
         if result == NO_RESULT:
-            return None
+            return {
+                **request_context,
+                "pending": True,
+                "request_status": "queued",
+                "outputs": "[]",
+            }
+        elif isinstance(result, dict) and result.get("pending") is True:
+            # Return a serialized snapshot while retaining the mutable progress
+            # object until the worker replaces it with the final result.
+            return {
+                **request_context,
+                "pending": True,
+                "request_status": "running",
+                "outputs": json.dumps(result.get("outputs", [])),
+            }
         else:
-            return kernel_results.pop(uid)
+            self.__execution_metadata.get(kernel_id, {}).pop(uid, None)
+            return {
+                **kernel_results.pop(uid),
+                **request_context,
+                "pending": False,
+                "request_status": "complete",
+            }
+
+    def pending(self, kernel_id: str) -> list[dict[str, t.Any]]:
+        """Describe active requests without consuming their final results."""
+        requests: list[dict[str, t.Any]] = []
+        for uid, result in self.__execution_results.get(kernel_id, {}).items():
+            metadata = self.__execution_metadata.get(kernel_id, {}).get(uid)
+            context = {
+                "request_id": uid,
+                "kernel_id": kernel_id,
+                "request_url": f"/api/kernels/{kernel_id}/requests/{uid}",
+                "cell_id": metadata.get("cell_id") if isinstance(metadata, dict) else None,
+                "document_path": (
+                    metadata.get("document_path") if isinstance(metadata, dict) else None
+                ),
+                "pending": True,
+            }
+            if result == NO_RESULT:
+                requests.append({**context, "request_status": "queued", "outputs": "[]"})
+            elif isinstance(result, dict) and result.get("pending") is True:
+                requests.append(
+                    {
+                        **context,
+                        "request_status": "running",
+                        "outputs": json.dumps(result.get("outputs", [])),
+                    }
+                )
+        return requests
 
     def put(
         self,
@@ -301,8 +369,11 @@ class ExecutionStack:
 
         if kernel_id not in self.__execution_results:
             self.__execution_results[kernel_id] = {}
+        if kernel_id not in self.__execution_metadata:
+            self.__execution_metadata[kernel_id] = {}
         # Make the stack aware a request `uid` exists.
         self.__execution_results[kernel_id][uid] = NO_RESULT
+        self.__execution_metadata[kernel_id][uid] = metadata
         if kernel_id not in self.__pending_inputs:
             self.__pending_inputs[kernel_id] = PendingInput()
         if kernel_id not in self.__tasks:
