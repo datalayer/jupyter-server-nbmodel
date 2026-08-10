@@ -495,8 +495,16 @@ async def test_execution_timing_metadata(
     started_time = execution["shell.execute_reply.started"]
     reply_time = execution["shell.execute_reply"]
 
-    started_dt = datetime.datetime.fromisoformat(started_time)
-    reply_dt = datetime.datetime.fromisoformat(reply_time)
+    # Match jupyter_client UTC serialization (isoformat with Z).
+    assert started_time.endswith("Z"), started_time
+    assert reply_time.endswith("Z"), reply_time
+
+    started_dt = datetime.datetime.fromisoformat(started_time.replace("Z", "+00:00"))
+    reply_dt = datetime.datetime.fromisoformat(reply_time.replace("Z", "+00:00"))
+
+    # Execution timestamps represent UTC and must retain an explicit timezone offset.
+    assert started_dt.utcoffset() == datetime.timedelta(0)
+    assert reply_dt.utcoffset() == datetime.timedelta(0)
 
     # Assert that reply_time is greater than started_time
     assert reply_dt > started_dt, "The reply time is not greater than the started time."

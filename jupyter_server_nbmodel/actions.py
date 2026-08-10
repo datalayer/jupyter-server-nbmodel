@@ -286,7 +286,7 @@ async def _execute_snippet(
     if metadata is not None:
         ycell = await _get_ycell(ydoc, metadata)
         if ycell is not None:
-            execution_start_time = datetime.now(timezone.utc).isoformat()[:-6]
+            execution_start_time = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             # Reset cell
             with ycell.doc.transaction():
                 del ycell["outputs"][:]
@@ -349,7 +349,7 @@ async def _execute_snippet(
         )
     reply_content = reply["content"]
     if ycell is not None:
-        execution_end_time = datetime.now(timezone.utc).isoformat()[:-6]
+        execution_end_time = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         with ycell.doc.transaction():
             ycell["execution_count"] = reply_content.get("execution_count")
             ycell["execution_state"] = "idle"
