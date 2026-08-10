@@ -24,6 +24,8 @@ import {
 const MAX_POLLING_INTERVAL = 1000;
 
 interface IOutputReconciliationState {
+  accepted?: boolean;
+  onAccepted?: () => void;
   serverOutputs?: any[];
 }
 
@@ -53,6 +55,10 @@ async function reconcilePendingOutputs(
         requestId: payload.request_id,
         requestUrl
       });
+    }
+    if (!state.accepted) {
+      state.accepted = true;
+      state.onAccepted?.();
     }
   }
 
@@ -226,7 +232,8 @@ export async function requestServer(
   init: RequestInit,
   settings: ServerConnection.ISettings,
   translator?: ITranslator,
-  interval = 100
+  interval = 100,
+  onAccepted?: () => void
 ): Promise<Response> {
   return requestServerWithState(
     cell,
@@ -235,7 +242,7 @@ export async function requestServer(
     settings,
     translator,
     interval,
-    {}
+    { onAccepted }
   );
 }
 
