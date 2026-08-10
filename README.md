@@ -108,13 +108,111 @@ The debugging sessions produced the following evidence:
   the browser could not resolve, so they never became observable shared-model
   changes even though the server could persist the resulting notebook.
 
-The immediate root cause is therefore an unresolved dependency chain in some
-historical YStore documents. The exact earlier operation that first creates
-that chain has not yet been isolated. Stream-output representation was one area
-of concern: nested Yjs text must be integrated through a shared map, and a
-`pycrdt.Text` append must not be wrapped in another document transaction. Those
-operations have been corrected, but they cannot repair invalid history that is
-already stored.
+There were ultimately three related but distinct failures:
+
+1. Some historical YStore documents contained an unresolved CRDT dependency
+   chain. The browser retained later updates in `Y.Doc.store.pendingStructs`,
+   so the server could save the output while the browser never observed it.
+   The operation that originally created every affected historical chain has
+   not been isolated.
+2. The HTTP recovery made the browser and server concurrent writers to the
+   cell's shared output array. If the browser inserted the accumulated stream
+   `1234` and the server then blindly appended its view of the same stream, the
+   persisted result could become `12341234`. The server now compares the
+   current shared text with its kernel-side accumulator and treats an already
+   applied snapshot as a no-op.
+3. An attempted fix used an array-wide authoritative synchronizer that deleted
+   and replaced integrated output entries. A nested `Map`/`Text` replacement
+   could temporarily expose `{output_type: "stream"}` without `text` to the
+   JavaScript model. JupyterLab then failed in `OutputAreaModel._add` while
+   calling `value.text.join("")`; code-cell construction aborted and the
+   notebook appeared completely empty. That synchronizer was removed. The
+   current hook never replaces or deletes integrated output-array entries.
+
+#### Concrete `pycrdt` checks used during debugging
+
+The following command reproduces the supported stream representation and the
+append operation used by the server. The nested `Text` is first placed in a
+shared `Map`, the `Map` is integrated into a shared `Array`, and `Text.__iadd__`
+owns its transaction. It is intentionally not wrapped in
+`with outputs.doc.transaction()`.
+
+```bash
+python - <<'PY'
+from pycrdt import Array, Doc, Map, Text
+
+server = Doc()
+server_outputs = server.get("outputs", type=Array)
+with server.transaction():
+    server_outputs.append(
+        Map({
+            "output_type": "stream",
+            "name": "stdout",
+            "text": Text("1\n"),
+        })
+    )
+
+browser = Doc()
+browser_outputs = browser.get("outputs", type=Array)
+browser.apply_update(server.get_update())
+server_state = server.get_state()
+
+text = browser_outputs[0]["text"]
+assert isinstance(text, Text)
+text += "2\n"
+server.apply_update(browser.get_update(server_state))
+
+print(repr(str(browser_outputs[0]["text"])))
+print(repr(str(server_outputs[0]["text"])))
+PY
+```
+
+The observed result was:
+
+```text
+'1\n2\n'
+'1\n2\n'
+```
+
+We also reconstructed the real SQLite YStore during the investigation instead
+of assuming that the `.ipynb` file described the browser's CRDT state. The
+important detail is to create typed roots before applying updates:
+
+```bash
+python - <<'PY'
+import sqlite3
+from pycrdt import Array, Doc, Map
+
+database = "/home/echarles/Desktop/notebooks/.jupyter_ystore.db"
+connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+
+for (room,) in connection.execute("SELECT DISTINCT path FROM yupdates"):
+    document = Doc()
+    cells = document.get("cells", type=Array)
+    metadata = document.get("meta", type=Map)
+    state = document.get("state", type=Map)
+
+    updates = connection.execute(
+        "SELECT yupdate FROM yupdates WHERE path = ? ORDER BY timestamp",
+        (room,),
+    )
+    for (update,) in updates:
+        document.apply_update(update)
+
+    print(room, state.to_py().get("path"), len(cells))
+    for index, cell in enumerate(cells):
+        outputs = cell.get("outputs", [])
+        print(index, [output.to_py() for output in outputs])
+PY
+```
+
+This confirmed that the inspected `.ipynb` files still contained their cells
+and that the final reconstructed YStore values had valid stream text. The
+empty-notebook crash came from an invalid transient nested update delivered to
+the live JavaScript model, not from cells being deleted from the notebook file.
+Stopping the server and resetting an already-polluted YStore may still be
+required; correcting the writer prevents creating that state again but cannot
+remove historical updates already stored in the database.
 
 To remain functional with an affected history, execution now uses a primary
 output path plus two recovery layers:
