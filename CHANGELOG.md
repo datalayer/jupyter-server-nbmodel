@@ -2,6 +2,30 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.1.4
+
+([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/v0.1.3...871868ac7fdc6db59304bb16a3c37468acc6a0db))
+
+### Bugs fixed
+
+- enh: synchroniser to workaround YStore discrampencies [#82](https://github.com/datalayer/jupyter-server-nbmodel/pull/82) ([@echarles](https://github.com/echarles))
+- Fix timezone handling in execution timestamps [#80](https://github.com/datalayer/jupyter-server-nbmodel/pull/80) ([@samssh](https://github.com/samssh), [@echarles](https://github.com/echarles))
+
+### Maintenance and upkeep improvements
+
+- ci: publish release for trusted publisher [#81](https://github.com/datalayer/jupyter-server-nbmodel/pull/81) ([@echarles](https://github.com/echarles))
+
+### Contributors to this release
+
+The following people contributed discussions, new ideas, code and documentation contributions, and review.
+See [our definition of contributors](https://github-activity.readthedocs.io/en/latest/use/#how-does-this-tool-define-contributions-in-the-reports).
+
+([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2026-08-09&to=2026-08-10&type=c))
+
+@echarles ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aecharles+updated%3A2026-08-09..2026-08-10&type=Issues)) | @samssh ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Asamssh+updated%3A2026-08-09..2026-08-10&type=Issues))
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.1.3
 
 ([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/v0.1.1a5...04dc0cde712fd1cc5df0f7f89def24716dd5d384))
@@ -30,8 +54,6 @@ See [our definition of contributors](https://github-activity.readthedocs.io/en/l
 ([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2026-07-22&to=2026-08-09&type=c))
 
 @echarles ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aecharles+updated%3A2026-07-22..2026-08-09&type=Issues)) | @truongle1501 ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Atruongle1501+updated%3A2026-07-22..2026-08-09&type=Issues))
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.1.1a5
 
