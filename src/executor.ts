@@ -12,7 +12,11 @@ import { INotebookCellExecutor } from '@jupyterlab/notebook';
 import { ServerConnection } from '@jupyterlab/services';
 import { nullTranslator } from '@jupyterlab/translation';
 import { JSONExt } from '@lumino/coreutils';
-import { clearServerExecutionMetadata } from './executionMetadata';
+import {
+  clearServerExecutionMetadata,
+  markClientOwnedExecution,
+  unmarkClientOwnedExecution
+} from './executionMetadata';
 import { normalizeServerOutputs } from './outputReconciliation';
 import { requestServer } from './requestServer';
 
@@ -141,6 +145,7 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
             }
           };
           sharedCodeCell.changed.connect(onSharedModelChanged);
+          markClientOwnedExecution(cell as CodeCell);
           let success = false;
           try {
             // FIXME quid of deletedCells and timing record.
@@ -209,6 +214,7 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
               throw error;
             }
           } finally {
+            unmarkClientOwnedExecution(cell as CodeCell);
             sharedCodeCell.changed.disconnect(onSharedModelChanged);
           }
           onCellExecuted({ cell, success });

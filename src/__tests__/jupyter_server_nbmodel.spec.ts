@@ -8,6 +8,9 @@ import type { CodeCell } from '@jupyterlab/cells';
 import {
   clearServerExecutionMetadata,
   getServerExecutionMetadata,
+  isClientOwnedExecution,
+  markClientOwnedExecution,
+  unmarkClientOwnedExecution,
   setServerExecutionMetadata
 } from '../executionMetadata';
 import {
@@ -114,6 +117,16 @@ describe('jupyter-server-nbmodel', () => {
     expect(getServerExecutionMetadata(cell)).toEqual(execution);
     clearServerExecutionMetadata(cell);
     expect(getServerExecutionMetadata(cell)).toBeUndefined();
+  });
+
+  it('distinguishes live executions from requests inherited after refresh', () => {
+    const { cell } = createCell([]);
+
+    expect(isClientOwnedExecution(cell)).toBe(false);
+    markClientOwnedExecution(cell);
+    expect(isClientOwnedExecution(cell)).toBe(true);
+    unmarkClientOwnedExecution(cell);
+    expect(isClientOwnedExecution(cell)).toBe(false);
   });
 
   it('recognizes a shorter stream snapshot as a prefix', () => {

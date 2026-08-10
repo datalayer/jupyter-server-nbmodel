@@ -8,10 +8,31 @@ import type { CodeCell } from '@jupyterlab/cells';
 
 export const EXECUTION_METADATA_KEY = 'jupyter_server_nbmodel';
 
+const clientOwnedExecutions = new WeakSet<CodeCell>();
+
 export interface IServerExecutionMetadata {
   kernelId: string;
   requestId: string;
   requestUrl: string;
+}
+
+/**
+ * Mark a cell execution as owned by the executor in this browser page.
+ *
+ * The execution restorer must only poll requests inherited from a previous
+ * page. Polling a live request here as well would race the executor for the
+ * consumptive result endpoint.
+ */
+export function markClientOwnedExecution(cell: CodeCell): void {
+  clientOwnedExecutions.add(cell);
+}
+
+export function unmarkClientOwnedExecution(cell: CodeCell): void {
+  clientOwnedExecutions.delete(cell);
+}
+
+export function isClientOwnedExecution(cell: CodeCell): boolean {
+  return clientOwnedExecutions.has(cell);
 }
 
 export function getServerExecutionMetadata(
