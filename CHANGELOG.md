@@ -2,6 +2,25 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.2.2
+
+([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/v0.2.0...7a4e3d6276ae46a582e1e29eb3b3c979425e16fb))
+
+### Bugs fixed
+
+- fix: cell exec order [#83](https://github.com/datalayer/jupyter-server-nbmodel/pull/83) ([@echarles](https://github.com/echarles))
+
+### Contributors to this release
+
+The following people contributed discussions, new ideas, code and documentation contributions, and review.
+See [our definition of contributors](https://github-activity.readthedocs.io/en/latest/use/#how-does-this-tool-define-contributions-in-the-reports).
+
+([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2026-08-10&to=2026-08-10&type=c))
+
+@echarles ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aecharles+updated%3A2026-08-10..2026-08-10&type=Issues))
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.2.0
 
 ([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/v0.1.3...871868ac7fdc6db59304bb16a3c37468acc6a0db))
@@ -23,8 +42,6 @@ See [our definition of contributors](https://github-activity.readthedocs.io/en/l
 ([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2026-08-09&to=2026-08-10&type=c))
 
 @echarles ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aecharles+updated%3A2026-08-09..2026-08-10&type=Issues)) | @samssh ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Asamssh+updated%3A2026-08-09..2026-08-10&type=Issues))
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.1.3
 
