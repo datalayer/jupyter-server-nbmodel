@@ -12,15 +12,21 @@ import { INotebookCellExecutor } from '@jupyterlab/notebook';
 import { ServerConnection } from '@jupyterlab/services';
 import { nullTranslator } from '@jupyterlab/translation';
 import { JSONExt } from '@lumino/coreutils';
-import { clearServerExecutionMetadata } from './executionMetadata';
+import {
+  clearServerExecutionMetadata,
+  markClientOwnedExecution,
+  unmarkClientOwnedExecution
+} from './executionMetadata';
 import { normalizeServerOutputs } from './outputReconciliation';
 import { requestServer } from './requestServer';
+import { KernelSubmissionQueue } from './submissionQueue';
 
 /**
  * Notebook cell executor posting a request to the server for execution.
  */
 export class NotebookCellServerExecutor implements INotebookCellExecutor {
   private _serverSettings: ServerConnection.ISettings;
+  private _submissionQueue = new KernelSubmissionQueue();
 
   /**
    * Constructor
@@ -92,6 +98,12 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
             return true;
           }
           const kernelId = sessionContext?.session?.kernel?.id;
+          if (!kernelId) {
+            cell.model.sharedModel.transact(() => {
+              (cell.model as ICodeCellModel).clearExecution();
+            });
+            return true;
+          }
           const executeApiURL = URLExt.join(
             this._serverSettings.baseUrl,
             `api/kernels/${kernelId}/execute`
@@ -141,6 +153,9 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
             }
           };
           sharedCodeCell.changed.connect(onSharedModelChanged);
+          markClientOwnedExecution(cell as CodeCell);
+          const releaseSubmission =
+            await this._submissionQueue.acquire(kernelId);
           let success = false;
           try {
             // FIXME quid of deletedCells and timing record.
@@ -149,7 +164,9 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
               executeApiURL,
               init,
               this._serverSettings,
-              translator
+              translator,
+              100,
+              releaseSubmission
             );
             const data = await response.json();
             success = data['status'] === 'ok';
@@ -209,6 +226,10 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
               throw error;
             }
           } finally {
+            // Also release on an HTTP/network failure before the server could
+            // acknowledge the request, so later cells are never deadlocked.
+            releaseSubmission();
+            unmarkClientOwnedExecution(cell as CodeCell);
             sharedCodeCell.changed.disconnect(onSharedModelChanged);
           }
           onCellExecuted({ cell, success });

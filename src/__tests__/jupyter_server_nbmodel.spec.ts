@@ -8,12 +8,16 @@ import type { CodeCell } from '@jupyterlab/cells';
 import {
   clearServerExecutionMetadata,
   getServerExecutionMetadata,
+  isClientOwnedExecution,
+  markClientOwnedExecution,
+  unmarkClientOwnedExecution,
   setServerExecutionMetadata
 } from '../executionMetadata';
 import {
   isOutputPrefix,
   reconcileOutputSnapshot
 } from '../outputReconciliation';
+import { KernelSubmissionQueue } from '../submissionQueue';
 import { restoreKernelModelStatus, restoreKernelStatus } from '../kernelStatus';
 import type { NotebookPanel } from '@jupyterlab/notebook';
 
@@ -114,6 +118,34 @@ describe('jupyter-server-nbmodel', () => {
     expect(getServerExecutionMetadata(cell)).toEqual(execution);
     clearServerExecutionMetadata(cell);
     expect(getServerExecutionMetadata(cell)).toBeUndefined();
+  });
+
+  it('distinguishes live executions from requests inherited after refresh', () => {
+    const { cell } = createCell([]);
+
+    expect(isClientOwnedExecution(cell)).toBe(false);
+    markClientOwnedExecution(cell);
+    expect(isClientOwnedExecution(cell)).toBe(true);
+    unmarkClientOwnedExecution(cell);
+    expect(isClientOwnedExecution(cell)).toBe(false);
+  });
+
+  it('serializes request submission to the same kernel', async () => {
+    const queue = new KernelSubmissionQueue();
+
+    const releaseFirst = await queue.acquire('kernel-id');
+    let secondAcquired = false;
+    const secondTurn = queue.acquire('kernel-id').then(release => {
+      secondAcquired = true;
+      return release;
+    });
+
+    await Promise.resolve();
+    expect(secondAcquired).toBe(false);
+    releaseFirst();
+    const releaseSecond = await secondTurn;
+    expect(secondAcquired).toBe(true);
+    releaseSecond();
   });
 
   it('recognizes a shorter stream snapshot as a prefix', () => {

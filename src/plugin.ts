@@ -18,6 +18,7 @@ import {
 import { ServerConnection } from '@jupyterlab/services';
 import {
   getServerExecutionMetadata,
+  isClientOwnedExecution,
   setServerExecutionMetadata
 } from './executionMetadata';
 import {
@@ -42,6 +43,12 @@ async function resumeCellExecution(
   app: JupyterFrontEnd
 ): Promise<void> {
   if (panel.isDisposed) {
+    return;
+  }
+
+  // Metadata created by the executor in this page is already being polled by
+  // that executor. The restorer only owns requests inherited across reloads.
+  if (isClientOwnedExecution(cell)) {
     return;
   }
 
