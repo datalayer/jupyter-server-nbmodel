@@ -1,9 +1,7 @@
 [![Become a Sponsor](https://img.shields.io/static/v1?label=Become%20a%20Sponsor&message=%E2%9D%A4&logo=GitHub&style=flat&color=1ABC9C)](https://github.com/sponsors/datalayer)
 [![Github Actions Status](https://github.com/datalayer/jupyter-server-nbmodel/workflows/Build/badge.svg)](https://github.com/datalayer/jupyter-server-nbmodel/actions/workflows/build.yml)
 
-[![PyPI - Version](https://img.shields.io/pypi/v/jupyter-server-nbmodel?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/jupyter-server-nbmodel)
-[![Total PyPI downloads](https://img.shields.io/pepy/dt/jupyter-server-nbmodel?style=for-the-badge&logo=python&logoColor=white)](https://pepy.tech/project/jupyter-server-nbmodel)
-[![License](https://img.shields.io/badge/License-BSD_3--Clause-blue?style=for-the-badge&logo=open-source-initiative&logoColor=white)](https://opensource.org/licenses/BSD-3-Clause)
+[![PyPI - Version](https://img.shields.io/pypi/v/jupyter-server-nbmodel?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/jupyter-server-nbmodel) [![Total PyPI downloads](https://img.shields.io/pepy/dt/jupyter-server-nbmodel?style=for-the-badge&logo=python&logoColor=white)](https://pepy.tech/project/jupyter-server-nbmodel) [![License](https://img.shields.io/badge/License-BSD_3--Clause-blue?style=for-the-badge&logo=open-source-initiative&logoColor=white)](https://opensource.org/licenses/BSD-3-Clause)
 
 # 🪐 📄 Jupyter Server Nbmodel
 
@@ -26,14 +24,20 @@ costs you an execution — and the outputs are still there when you come back.
 - **🤖 Agent ready** — a REST API to run cells and read outputs, so an agent works
   from the same Notebook you do.
 
+[![HOT NEWS](https://img.shields.io/badge/%F0%9F%94%A5%20HOT%20NEWS-Hosted%20MCP%20is%20live-E74C3C?style=for-the-badge&labelColor=922B21)](https://jupyter-mcp-server.datalayer.tech/hosted) [![Claude Code plugin](https://img.shields.io/badge/%F0%9F%A4%96%20Claude%20Code-plugin%20available-8E44AD?style=for-the-badge&labelColor=5B2C6F)](https://github.com/datalayer/jupyter-mcp-server/tree/main/ext/claude-plugin)
+
+**Your agent can now reach these Notebooks without running anything.** Datalayer hosts a
+Jupyter MCP endpoint at **`https://mcp.datalayer.run/mcp`** — durable execution included, so a
+cell keeps running after the agent disconnects. Claude Code connects with one command through
+the [Datalayer plugin](https://github.com/datalayer/jupyter-mcp-server/tree/main/ext/claude-plugin).
+
+---
+
 **Free and open source, BSD 3-Clause** — install it in your own Jupyter, no account needed.
 Built and maintained by [**Datalayer**](https://datalayer.ai), where the same durable execution
 powers always-on Notebooks that humans and AI agents work in together.
 
-[![Discover Datalayer](https://img.shields.io/badge/%E2%86%92%20Discover%20Datalayer-datalayer.ai-1ABC9C?style=for-the-badge&labelColor=0E7C6B)](https://datalayer.ai)
-
-
-[![Install from PyPI](https://img.shields.io/badge/pip%20install-jupyter__server__nbmodel-306998?style=for-the-badge&logo=python&logoColor=white&labelColor=1E4064)](https://pypi.org/project/jupyter-server-nbmodel)
+[![Install from PyPI](https://img.shields.io/badge/pip%20install-jupyter__server__nbmodel-306998?style=for-the-badge&logo=python&logoColor=white&labelColor=1E4064)](https://pypi.org/project/jupyter-server-nbmodel) [![Discover Datalayer](https://img.shields.io/badge/%E2%86%92%20Discover%20Datalayer-datalayer.ai-1ABC9C?style=for-the-badge&labelColor=0E7C6B)](https://datalayer.ai)
 </td></tr>
 </table>
 
