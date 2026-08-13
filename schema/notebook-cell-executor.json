@@ -1,0 +1,14 @@
+{
+  "title": "Jupyter Server Nbmodel",
+  "description": "Execution of the notebook cells on the Jupyter Server.",
+  "type": "object",
+  "properties": {
+    "outputRecovery": {
+      "title": "Recover the outputs over HTTP",
+      "description": "Read the outputs of a running cell from the execution request as well as from the collaborative document, and resume the polling of a request after a page reload. Turn this on when outputs are saved by the server but never appear in the notebook, which happens with a collaborative history the browser cannot integrate. It makes this extension a second writer of the shared document; the collaborative updates alone are used otherwise.",
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -17,8 +17,12 @@ import {
   markClientOwnedExecution,
   unmarkClientOwnedExecution
 } from './executionMetadata';
-import { normalizeServerOutputs } from './outputReconciliation';
+import {
+  normalizeServerOutputs,
+  reconcileOutputSnapshot
+} from './outputReconciliation';
 import { requestServer } from './requestServer';
+import { isOutputRecoveryEnabled } from './settings';
 import { KernelSubmissionQueue } from './submissionQueue';
 
 /**
@@ -137,6 +141,30 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
           };
           onCellExecutionScheduled({ cell });
           const sharedCodeCell = (cell.model as ICodeCellModel).sharedModel;
+          /*
+           * What the cell showed belongs to the previous execution.
+           *
+           * The server clears the outputs of the shared cell when it starts
+           * executing, and JupyterLab clears them in its own executor. This
+           * is the same gesture on the client: without it, a cell that is run
+           * again keeps what it had, and the outputs of the new execution are
+           * appended below the old ones.
+           *
+           * Through the output area, as JupyterLab does, and never through
+           * the shared model: replacing the outputs array of a cell is what
+           * can expose a half-built nested value to the widget being
+           * constructed — the failure that once left a notebook empty. And
+           * whatever it does, it must not keep the cell from running, hence
+           * the guard.
+           */
+          try {
+            (cell as CodeCell).outputArea.model.clear();
+          } catch (reason) {
+            console.warn(
+              '[jupyter-server-nbmodel] Failed to clear the outputs of the cell.',
+              reason
+            );
+          }
           let sharedModelUpdates = 0;
           const onSharedModelChanged = (): void => {
             sharedModelUpdates += 1;
@@ -153,7 +181,10 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
             }
           };
           sharedCodeCell.changed.connect(onSharedModelChanged);
-          markClientOwnedExecution(cell as CodeCell);
+          const recoverOutputs = isOutputRecoveryEnabled();
+          if (recoverOutputs) {
+            markClientOwnedExecution(cell as CodeCell);
+          }
           const releaseSubmission =
             await this._submissionQueue.acquire(kernelId);
           let success = false;
@@ -166,11 +197,14 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
               this._serverSettings,
               translator,
               100,
-              releaseSubmission
+              releaseSubmission,
+              recoverOutputs
             );
             const data = await response.json();
             success = data['status'] === 'ok';
-            clearServerExecutionMetadata(cell as CodeCell);
+            if (recoverOutputs) {
+              clearServerExecutionMetadata(cell as CodeCell);
+            }
 
             const serverOutputs = normalizeServerOutputs(
               data['outputs'] ?? '[]'
@@ -199,7 +233,7 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
             // was unavailable (no collaboration extension) or could not be
             // integrated (for example an invalid historical YStore), reconcile
             // the completed result returned by the REST endpoint in the client.
-            if (outputsMissing || executionCountMissing) {
+            if (recoverOutputs && (outputsMissing || executionCountMissing)) {
               console.warn(
                 '[jupyter-server-nbmodel] Reconciling missing server execution update',
                 {
@@ -211,7 +245,12 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
                   executionCountMissing
                 }
               );
-              sharedCodeCell.setOutputs(serverOutputs);
+              // The same reconciliation as the pending snapshots, and for the
+              // same reason: this answer is one view of the execution, not
+              // the authority on it. An interrupted cell, whose stream the
+              // browser read further than the snapshot did, would otherwise
+              // lose that stream and keep only the error that stopped it.
+              reconcileOutputSnapshot(cell as CodeCell, serverOutputs);
               sharedCodeCell.execution_count = executionCount;
               sharedCodeCell.executionState = 'idle';
             }
@@ -261,13 +300,17 @@ export async function resumeCellServerExecution(
       cell,
       requestUrl,
       { method: 'GET' },
-      serverSettings
+      serverSettings,
+      undefined,
+      100,
+      undefined,
+      // A resumed request is the recovery: this page inherited it, and the
+      // outputs it missed can only come from the answers of the server.
+      true
     );
     const data = await response.json();
     const serverOutputs = normalizeServerOutputs(data['outputs'] ?? '[]');
-    if (!JSONExt.deepEqual(sharedCodeCell.getOutputs(), serverOutputs)) {
-      sharedCodeCell.setOutputs(serverOutputs);
-    }
+    reconcileOutputSnapshot(cell, serverOutputs);
     sharedCodeCell.execution_count = data['execution_count'] ?? null;
     sharedCodeCell.executionState = 'idle';
     clearServerExecutionMetadata(cell);

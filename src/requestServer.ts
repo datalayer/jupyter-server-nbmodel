@@ -26,6 +26,8 @@ const MAX_POLLING_INTERVAL = 1000;
 interface IOutputReconciliationState {
   accepted?: boolean;
   onAccepted?: () => void;
+  /** Whether the outputs of the pending answers are read into the cell. */
+  recoverOutputs?: boolean;
   serverOutputs?: any[];
 }
 
@@ -49,7 +51,9 @@ async function reconcilePendingOutputs(
   }
   if (payload.request_id && payload.kernel_id) {
     const requestUrl = response.headers.get('Location') ?? payload.request_url;
-    if (requestUrl) {
+    // The metadata is what a reloaded page resumes from; it is only written
+    // when that recovery is in use.
+    if (requestUrl && state.recoverOutputs) {
       setServerExecutionMetadata(cell, {
         kernelId: payload.kernel_id,
         requestId: payload.request_id,
@@ -62,7 +66,7 @@ async function reconcilePendingOutputs(
     }
   }
 
-  if (payload.outputs === undefined) {
+  if (payload.outputs === undefined || !state.recoverOutputs) {
     return;
   }
   const serverOutputs = normalizeServerOutputs(payload.outputs);
@@ -233,7 +237,9 @@ export async function requestServer(
   settings: ServerConnection.ISettings,
   translator?: ITranslator,
   interval = 100,
-  onAccepted?: () => void
+  onAccepted?: () => void,
+  /** Whether the pending answers are read into the cell; see `settings`. */
+  recoverOutputs = false
 ): Promise<Response> {
   return requestServerWithState(
     cell,
@@ -242,7 +248,7 @@ export async function requestServer(
     settings,
     translator,
     interval,
-    { onAccepted }
+    { onAccepted, recoverOutputs }
   );
 }
 

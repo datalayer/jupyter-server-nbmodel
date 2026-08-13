@@ -95,6 +95,46 @@ describe('jupyter-server-nbmodel', () => {
     expect(updateStatus).toHaveBeenCalledWith('busy');
   });
 
+  it('keeps the stream an interrupt stopped and adds the error', () => {
+    // The cell read the kernel further than the snapshot did; the snapshot
+    // carries the error that stopped it. Both are true, and both are kept.
+    const { cell, add, setOutputs } = createCell([stream('1\n2\n3\n')]);
+    const error = {
+      output_type: 'error',
+      ename: 'KeyboardInterrupt',
+      evalue: '',
+      traceback: []
+    };
+
+    reconcileOutputSnapshot(cell, [stream('1\n2\n'), error]);
+
+    expect(setOutputs).not.toHaveBeenCalled();
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(add).toHaveBeenCalledWith(error);
+  });
+
+  it('never shortens a stream the cell already shows', () => {
+    const { cell, add, setOutputs } = createCell([stream('1\n2\n3\n')]);
+
+    reconcileOutputSnapshot(cell, [stream('1\n')]);
+
+    expect(setOutputs).not.toHaveBeenCalled();
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it('replaces outputs that cannot be reached by appending', () => {
+    const { cell, setOutputs } = createCell([
+      { output_type: 'display_data', data: { 'text/plain': 'old' } }
+    ]);
+    const updated = [
+      { output_type: 'display_data', data: { 'text/plain': 'new' } }
+    ];
+
+    reconcileOutputSnapshot(cell, updated);
+
+    expect(setOutputs).toHaveBeenCalledWith(updated);
+  });
+
   it('persists the request identity needed after refresh', () => {
     let metadata: unknown;
     const cell = {

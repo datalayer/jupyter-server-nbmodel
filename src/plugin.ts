@@ -16,6 +16,7 @@ import {
   NotebookPanel
 } from '@jupyterlab/notebook';
 import { ServerConnection } from '@jupyterlab/services';
+import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import {
   getServerExecutionMetadata,
   isClientOwnedExecution,
@@ -26,6 +27,12 @@ import {
   resumeCellServerExecution
 } from './executor';
 import { restoreKernelModelStatus, restoreKernelStatus } from './kernelStatus';
+import {
+  isOutputRecoveryEnabled,
+  OUTPUT_RECOVERY_SETTING,
+  PLUGIN_ID,
+  setOutputRecoveryEnabled
+} from './settings';
 
 const resumedRequests = new Set<string>();
 
@@ -42,7 +49,7 @@ async function resumeCellExecution(
   panel: NotebookPanel,
   app: JupyterFrontEnd
 ): Promise<void> {
-  if (panel.isDisposed) {
+  if (panel.isDisposed || !isOutputRecoveryEnabled()) {
     return;
   }
 
@@ -92,7 +99,10 @@ async function watchNotebookExecutions(
   app: JupyterFrontEnd
 ): Promise<void> {
   await Promise.all([panel.context.ready, panel.context.sessionContext.ready]);
-  if (panel.isDisposed) {
+  // Everything below recovers an execution this page did not start: it reads
+  // the answers of the server rather than the shared document, which is what
+  // the setting turns on.
+  if (panel.isDisposed || !isOutputRecoveryEnabled()) {
     return;
   }
 
@@ -188,10 +198,36 @@ export const notebookCellExecutor: JupyterFrontEndPlugin<INotebookCellExecutor> 
       'Add notebook cell executor that uses REST API instead of kernel protocol over WebSocket.',
     autoStart: true,
     provides: INotebookCellExecutor,
-    activate: (app: JupyterFrontEnd): INotebookCellExecutor => {
+    optional: [ISettingRegistry],
+    activate: (
+      app: JupyterFrontEnd,
+      settingRegistry: ISettingRegistry | null
+    ): INotebookCellExecutor => {
       const executor = new NotebookCellServerExecutor({
         serverSettings: app.serviceManager.serverSettings
       });
+      // Whether the outputs are recovered over HTTP, now and whenever the
+      // user changes their mind; the streaming path alone is the default.
+      void settingRegistry
+        ?.load(PLUGIN_ID)
+        .then(settings => {
+          const read = (current: ISettingRegistry.ISettings) => {
+            setOutputRecoveryEnabled(
+              current.get(OUTPUT_RECOVERY_SETTING).composite === true
+            );
+          };
+          read(settings);
+          settings.changed.connect(read);
+        })
+        .catch(reason => {
+          // Without the schema the recovery cannot be asked for, which is
+          // worth saying out loud: the outputs then only reach the notebook
+          // through the shared document.
+          console.warn(
+            `[jupyter-server-nbmodel] Failed to load the settings of ${PLUGIN_ID}; the output recovery stays off.`,
+            reason
+          );
+        });
       console.log('JupyterLab extension jupyter-server-nbmodel is activated!');
       return executor;
     }
