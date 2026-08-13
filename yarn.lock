@@ -1633,6 +1633,7 @@ __metadata:
     "@jupyterlab/notebook": ^4.2.0
     "@jupyterlab/outputarea": ^4.2.0
     "@jupyterlab/services": ^7.2.0
+    "@jupyterlab/settingregistry": ^4.2.0
     "@jupyterlab/testutils": ^4.2.0
     "@jupyterlab/translation": ^4.2.0
     "@lumino/coreutils": ^2.1.0
@@ -2464,6 +2465,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@jupyterlab/nbformat@npm:^4.6.3":
+  version: 4.6.3
+  resolution: "@jupyterlab/nbformat@npm:4.6.3"
+  dependencies:
+    "@lumino/coreutils": ^2.2.2
+  checksum: 9c47ea597fc8bebae3aaa40ef20c49c7fa80e0fdf788d604859d93aa482c7e2aa135ec65c4eb382e28548a94fcc46041ef6b7f9fbad4b4b2f3e652368a509bff
+  languageName: node
+  linkType: hard
+
 "@jupyterlab/notebook@npm:^4.2.0, @jupyterlab/notebook@npm:^4.4.4":
   version: 4.4.4
   resolution: "@jupyterlab/notebook@npm:4.4.4"
@@ -2586,6 +2596,25 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@jupyterlab/settingregistry@npm:^4.2.0":
+  version: 4.6.3
+  resolution: "@jupyterlab/settingregistry@npm:4.6.3"
+  dependencies:
+    "@jupyterlab/nbformat": ^4.6.3
+    "@jupyterlab/statedb": ^4.6.3
+    "@lumino/commands": ^2.3.3
+    "@lumino/coreutils": ^2.2.2
+    "@lumino/disposable": ^2.1.5
+    "@lumino/signaling": ^2.1.5
+    "@rjsf/utils": ^5.13.4
+    ajv: ^8.12.0
+    json5: ^2.2.3
+  peerDependencies:
+    react: ">=16"
+  checksum: 1e6f5dcdafc860067af83f445b0ddbb33531f64672f3c3bf4e961e85e7bf1c228e9da54e8dfe9818a484ea4a5d7338754159bb87b9676ab00fea9d9a36794927
+  languageName: node
+  linkType: hard
+
 "@jupyterlab/settingregistry@npm:^4.4.4":
   version: 4.4.4
   resolution: "@jupyterlab/settingregistry@npm:4.4.4"
@@ -2615,6 +2644,19 @@ __metadata:
     "@lumino/properties": ^2.0.3
     "@lumino/signaling": ^2.1.4
   checksum: 9b98f6cebdb812f3d586fd55a8ca4ac0198aa9f3492b2dc7d844209b58992ae63e432a74139e18e29e49094f86770ac5c10cb6d6e44b4ed97b47997b08220a80
+  languageName: node
+  linkType: hard
+
+"@jupyterlab/statedb@npm:^4.6.3":
+  version: 4.6.3
+  resolution: "@jupyterlab/statedb@npm:4.6.3"
+  dependencies:
+    "@lumino/commands": ^2.3.3
+    "@lumino/coreutils": ^2.2.2
+    "@lumino/disposable": ^2.1.5
+    "@lumino/properties": ^2.0.4
+    "@lumino/signaling": ^2.1.5
+  checksum: 2493f857d336d7d3917a0687e4ea6edd2adefb9f926999b2f593f1135d421bf864439cb43e6c023b6757ddc0d4be335f3300b2cdec38d1e4a6088aaa6c35e656
   languageName: node
   linkType: hard
 
@@ -2971,7 +3013,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lumino/commands@npm:^2.3.4":
+"@lumino/commands@npm:^2.3.3, @lumino/commands@npm:^2.3.4":
   version: 2.3.4
   resolution: "@lumino/commands@npm:2.3.4"
   dependencies:
@@ -2995,7 +3037,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lumino/coreutils@npm:^2.2.3":
+"@lumino/coreutils@npm:^2.2.2, @lumino/coreutils@npm:^2.2.3":
   version: 2.2.3
   resolution: "@lumino/coreutils@npm:2.2.3"
   dependencies:
@@ -3013,7 +3055,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lumino/disposable@npm:^2.1.6":
+"@lumino/disposable@npm:^2.1.5, @lumino/disposable@npm:^2.1.6":
   version: 2.1.6
   resolution: "@lumino/disposable@npm:2.1.6"
   dependencies:
@@ -3108,7 +3150,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lumino/properties@npm:^2.0.5":
+"@lumino/properties@npm:^2.0.4, @lumino/properties@npm:^2.0.5":
   version: 2.0.5
   resolution: "@lumino/properties@npm:2.0.5"
   checksum: db449230da197c9ac0a3f215cda6906549ae7b78c2566865a3335d57417478601571dd49e87c92593cb946c6ca510fd081a5d70776d7d3b3009ddd55caff694c
@@ -3125,7 +3167,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lumino/signaling@npm:^2.1.6":
+"@lumino/signaling@npm:^2.1.5, @lumino/signaling@npm:^2.1.6":
   version: 2.1.6
   resolution: "@lumino/signaling@npm:2.1.6"
   dependencies:

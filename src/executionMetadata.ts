@@ -39,7 +39,8 @@ export function getServerExecutionMetadata(
   cell: CodeCell
 ): IServerExecutionMetadata | undefined {
   const value = cell.model.getMetadata(EXECUTION_METADATA_KEY) as
-    Partial<IServerExecutionMetadata> | undefined;
+    | Partial<IServerExecutionMetadata>
+    | undefined;
   return value?.kernelId && value.requestId && value.requestUrl
     ? (value as IServerExecutionMetadata)
     : undefined;
