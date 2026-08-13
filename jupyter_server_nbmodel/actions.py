@@ -99,7 +99,7 @@ async def _get_ycell(
 
 
 @dataclass
-class StreamState:
+class _StreamState:
     """The stream this hook is writing into a cell, as the server sees it.
 
     The kernel sends the raw bytes a terminal would receive, control
@@ -190,7 +190,7 @@ def _common_prefix_length(left: str, right: str) -> int:
 def _output_hook(
     outputs: list[NotebookNode],
     ycell: y.Map | None,
-    stream_state: StreamState,
+    stream_state: _StreamState,
     msg: dict,
 ) -> None:
     """Callback on execution request when an output is emitted.
@@ -428,7 +428,7 @@ async def _execute_snippet(
         progress["outputs"] = outputs
     # FIXME we don't check if the session is consistent (aka the kernel is linked to the document)
     #   - should we?
-    output_hook = partial(_output_hook, outputs, ycell, StreamState())
+    output_hook = partial(_output_hook, outputs, ycell, _StreamState())
     if not getattr(client, "_server_nbmodel_remote", False):
         reply = await ensure_async(
             client.execute_interactive(

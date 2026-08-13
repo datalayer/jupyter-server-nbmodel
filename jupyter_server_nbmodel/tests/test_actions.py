@@ -5,9 +5,9 @@ import asyncio
 from pycrdt import Array, Doc, Text
 
 from jupyter_server_nbmodel.actions import (
-    StreamState,
     _apply_terminal_controls,
     _output_hook,
+    _StreamState,
     dedup_task_queue,
 )
 
@@ -22,7 +22,7 @@ def _stream_message(text: str) -> dict:
 def test_output_hook_preserves_stream_newlines() -> None:
     """Merged stream chunks retain separators when the notebook is reloaded."""
     emitted = []
-    state = StreamState()
+    state = _StreamState()
     doc = Doc()
     persisted = doc.get("outputs", type=Array)
     ycell = {"outputs": persisted}
@@ -40,7 +40,7 @@ def test_output_hook_preserves_stream_newlines() -> None:
 def test_output_hook_appends_to_reloaded_stream_text() -> None:
     """A stream loaded as collaborative Text remains writable after reload."""
     emitted = []
-    state = StreamState()
+    state = _StreamState()
     original_doc = Doc()
     original_outputs = original_doc.get("outputs", type=Array)
     _output_hook(emitted, {"outputs": original_outputs}, state, _stream_message("before reload\n"))
@@ -60,7 +60,7 @@ def test_output_hook_appends_to_reloaded_stream_text() -> None:
 def test_output_hook_does_not_append_browser_snapshot_twice() -> None:
     """A snapshot already inserted by polling remains unchanged by the hook."""
     emitted = []
-    state = StreamState()
+    state = _StreamState()
     doc = Doc()
     persisted = doc.get("outputs", type=Array)
     ycell = {"outputs": persisted}
@@ -139,7 +139,7 @@ def test_output_hook_overwrites_a_progress_line_in_place() -> None:
     carriage return.
     """
     emitted = []
-    state = StreamState()
+    state = _StreamState()
     doc = Doc()
     persisted = doc.get("outputs", type=Array)
     ycell = {"outputs": persisted}
@@ -159,9 +159,9 @@ def test_output_hook_keeps_the_stream_of_a_resumed_execution() -> None:
     persisted = doc.get("outputs", type=Array)
     ycell = {"outputs": persisted}
 
-    _output_hook(emitted, ycell, StreamState(), _stream_message("first\n"))
+    _output_hook(emitted, ycell, _StreamState(), _stream_message("first\n"))
     # A second execution hook, with no memory of what the cell already shows.
-    _output_hook(emitted, ycell, StreamState(), _stream_message("second\n"))
+    _output_hook(emitted, ycell, _StreamState(), _stream_message("second\n"))
 
     assert len(persisted) == 1
     assert str(persisted[0]["text"]) == "first\nsecond\n"

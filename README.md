@@ -1,20 +1,46 @@
-[![Datalayer](https://assets.datalayer.tech/datalayer-25.svg)](https://datalayer.io)
-
 [![Become a Sponsor](https://img.shields.io/static/v1?label=Become%20a%20Sponsor&message=%E2%9D%A4&logo=GitHub&style=flat&color=1ABC9C)](https://github.com/sponsors/datalayer)
+[![Github Actions Status](https://github.com/datalayer/jupyter-server-nbmodel/workflows/Build/badge.svg)](https://github.com/datalayer/jupyter-server-nbmodel/actions/workflows/build.yml)
+
+[![PyPI - Version](https://img.shields.io/pypi/v/jupyter-server-nbmodel?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/jupyter-server-nbmodel)
+[![Total PyPI downloads](https://img.shields.io/pepy/dt/jupyter-server-nbmodel?style=for-the-badge&logo=python&logoColor=white)](https://pepy.tech/project/jupyter-server-nbmodel)
+[![License](https://img.shields.io/badge/License-BSD_3--Clause-blue?style=for-the-badge&logo=open-source-initiative&logoColor=white)](https://opensource.org/licenses/BSD-3-Clause)
+
 
 # 🪐 Jupyter Server Nbmodel
 
-[![Github Actions Status](https://github.com/datalayer/jupyter-server-nbmodel/workflows/Build/badge.svg)](https://github.com/datalayer/jupyter-server-nbmodel/actions/workflows/build.yml)
+<h3 align="center">Stop losing your outputs to session timeouts or network loss.</h3>
 
-> Stop losing your outputs due to session timeouts or network loss.
+<p align="center">
+  Your cells run on the server, so a reload, a closed laptop or a dropped
+  connection no longer costs you an execution — and the outputs are still
+  there when you come back.
+</p>
 
-A Jupyter Server extension to execute code from the server-side Nbmodel to keep your sessions and outputs active.
+> [!NOTE]
+> <a href="https://datalayer.ai"><img alt="Datalayer" src="https://assets.datalayer.tech/datalayer-25.svg" height="22"/></a>
+>
+> - **⚡ Durable execution** — the cells run on the server, not in the browser tab.
+> - **🔄 Reload proof** — close the page, come back, the outputs are still arriving.
+> - **🤖 Agent ready** — a REST API to run cells and read outputs, so an agent works
+>   from the same Notebook you do.
+>
+> **Free and open source, BSD 3-Clause** — install it in your own Jupyter, no account needed.
+> Built and maintained by [**Datalayer**](https://datalayer.ai), where the same durable execution
+> powers always-on Notebooks that humans and AI agents work in together.
+> → **[datalayer.ai](https://datalayer.ai)**
+
+<p align="center">
+  <a href="https://pypi.org/project/jupyter-server-nbmodel"><img alt="Install from PyPI" src="https://img.shields.io/badge/pip%20install-jupyter__server__nbmodel-306998?style=for-the-badge&logo=python&logoColor=white&labelColor=1E4064"/></a>
+  <a href="https://datalayer.ai"><img alt="Discover Datalayer" src="https://img.shields.io/badge/Discover%20Datalayer-datalayer.ai-1ABC9C?style=for-the-badge&logo=jupyter&logoColor=white&labelColor=0E7C6B"/></a>
+</p>
 
 <p align="center">
   <img src="https://assets.datalayer.tech/jupyter-server-nbmodel/nbmodel.gif" alt="Jupyter Server Nbmodel Demo" width="800"/>
   <br>
   <em>Side-by-side comparison: Without jupyter_server_nbmodel (left), notebook execution stops when reloading the page; with jupyter_server_nbmodel (right), execution continues uninterrupted even after reload.</em>
 </p>
+
+A Jupyter Server extension to execute code from the server-side Nbmodel to keep your sessions and outputs active.
 
 This extension is composed of a Python package named `jupyter_server_nbmodel`
 for the server extension and a NPM package named `@datalayer/jupyter-server-nbmodel`
@@ -28,7 +54,8 @@ for i in range(1, 1000):
     time.sleep(1)
 ```
 
-Streaming outputs also works with `tqdm`.
+Streaming outputs also work with `tqdm`, whose progress bar overwrites its line
+instead of printing one line per update.
 
 ```py
 from tqdm import tqdm  # Standard tqdm, not tqdm.notebook
@@ -83,14 +110,15 @@ the frontend extension, check the frontend extension is installed:
 jupyter labextension list
 ```
 
-### [WIP] Existing notebooks stop receiving live outputs
+### Existing notebooks stop receiving live outputs
 
-Outputs are saved by the server and never appear in the notebook: the
-collaborative history of that document carries updates the browser cannot
-integrate.
-
-[Reconciliation](https://jupyter-server-nbmodel.datalayer.tech/reconciliation) explains what was found,
-what writes the outputs in each mode, and the `outputRecovery` setting that works around it.
+> [!WARNING]
+> **Work in progress.** Outputs are saved by the server and never appear in the
+> notebook: the collaborative history of that document carries updates the
+> browser cannot integrate.
+>
+> [**Reconciliation**](https://jupyter-server-nbmodel.datalayer.tech/reconciliation) explains what was
+> found, what writes the outputs in each mode, and the `outputRecovery` setting that works around it.
 
 ## How does it works
 
@@ -181,7 +209,7 @@ sequenceDiagram
     Server-->>-Frontend: Status 200 & { execution_count, status, outputs }
 ```
 
-> \[!NOTE\]
+> [!NOTE]
 > The code snippet is always send in the body of the POST `/api/kernels/<id>/execute`
 > request to avoid document model discrepancy; the document on the backend is only
 > eventually identical with the frontends (document updates are not instantaneous).
