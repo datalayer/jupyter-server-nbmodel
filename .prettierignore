@@ -5,3 +5,6 @@ node_modules
 !/package.json
 jupyter_server_nbmodel
 README.md
+# The documentation site is a Docusaurus project with its own conventions.
+docs
+coverage

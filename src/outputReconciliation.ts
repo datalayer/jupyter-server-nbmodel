@@ -67,21 +67,70 @@ export function isOutputPrefix(prefix: any[], outputs: any[]): boolean {
 }
 
 /**
+ * How many outputs of a snapshot the cell already holds.
+ *
+ * The two views of one execution may differ on the last stream they share:
+ * whichever of them read the kernel further has the longer text, and both are
+ * the same output. Anything else — a different kind, a different name, a text
+ * neither of which starts the other — ends the agreement.
+ *
+ * @returns The number of leading outputs the two agree on, or `-1` when they
+ *   disagree on one of them
+ */
+function agreedOutputs(currentOutputs: any[], serverOutputs: any[]): number {
+  const shared = Math.min(currentOutputs.length, serverOutputs.length);
+  for (let index = 0; index < shared; index += 1) {
+    const current = currentOutputs[index];
+    const server = serverOutputs[index];
+    if (JSONExt.deepEqual(current, server)) {
+      continue;
+    }
+    const sameStream =
+      current?.output_type === 'stream' &&
+      server?.output_type === 'stream' &&
+      current.name === server.name;
+    if (!sameStream) {
+      return -1;
+    }
+    const currentText = streamText(current);
+    const serverText = streamText(server);
+    if (
+      !serverText.startsWith(currentText) &&
+      !currentText.startsWith(serverText)
+    ) {
+      return -1;
+    }
+    // The last output they share may still be growing on either side; the
+    // ones before it must be settled.
+    if (index < shared - 1) {
+      return -1;
+    }
+  }
+  return shared;
+}
+
+/**
  * Append the part of a server snapshot missing from the output-area model.
  * Using the output-area API preserves the existing stream widget and lets the
  * cell model translate the append into a Y.Text insertion.
  */
 function appendOutputSuffix(
   cell: CodeCell,
-  currentOutputs: any[],
+  /** The leading outputs the cell and the snapshot agree on. */
+  appliedOutputs: any[],
   serverOutputs: any[]
 ): void {
-  let nextOutput = currentOutputs.length;
-  if (currentOutputs.length > 0) {
-    const lastIndex = currentOutputs.length - 1;
-    const current = currentOutputs[lastIndex];
+  let nextOutput = appliedOutputs.length;
+  if (
+    appliedOutputs.length > 0 &&
+    serverOutputs.length >= appliedOutputs.length
+  ) {
+    const lastIndex = appliedOutputs.length - 1;
+    const current = appliedOutputs[lastIndex];
     const server = serverOutputs[lastIndex];
     if (!JSONExt.deepEqual(current, server)) {
+      // Only the text the cell is missing: what it already shows is never
+      // written twice, and what it holds beyond the snapshot is never cut.
       const text = streamText(server).slice(streamText(current).length);
       if (text) {
         cell.outputArea.model.add({ ...server, text });
@@ -131,8 +180,19 @@ export function reconcileOutputSnapshot(
     cellId: sharedCodeCell.getId(),
     outputCount: serverOutputs.length
   });
-  if (isOutputPrefix(currentOutputs, serverOutputs)) {
-    appendOutputSuffix(cell, currentOutputs, serverOutputs);
+  /*
+   * What the two agree on stays, and the rest is appended.
+   *
+   * The cell may hold more of a stream than the snapshot does — it read the
+   * kernel further, or the snapshot was taken before the last chunk — and the
+   * snapshot may hold outputs the cell has not seen, which is the case an
+   * interrupt makes: the cell shows the stream, the snapshot ends with the
+   * error that stopped it. Replacing everything with the snapshot would throw
+   * the stream away, so only what follows the agreement is added.
+   */
+  const agreed = agreedOutputs(currentOutputs, serverOutputs);
+  if (agreed >= 0) {
+    appendOutputSuffix(cell, currentOutputs.slice(0, agreed), serverOutputs);
   } else {
     // Non-monotonic output changes (for example update_display_data) cannot be
     // represented as an append and still require authoritative replacement.

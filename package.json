@@ -60,6 +60,7 @@
         "@jupyterlab/notebook": "^4.2.0",
         "@jupyterlab/outputarea": "^4.2.0",
         "@jupyterlab/services": "^7.2.0",
+        "@jupyterlab/settingregistry": "^4.2.0",
         "@jupyterlab/translation": "^4.2.0",
         "@lumino/coreutils": "^2.1.0",
         "@lumino/widgets": "^2.7.3",
@@ -119,11 +120,13 @@
             "@jupyter/docprovider-extension:notebook-cell-executor"
         ],
         "extension": true,
-        "outputDir": "jupyter_server_nbmodel/labextension"
+        "outputDir": "jupyter_server_nbmodel/labextension",
+        "schemaDir": "schema"
     },
     "eslintIgnore": [
         "node_modules",
         "dist",
+        "docs",
         "coverage",
         "**/*.d.ts",
         "tests",

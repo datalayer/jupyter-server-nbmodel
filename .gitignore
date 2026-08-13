@@ -125,3 +125,6 @@ dmypy.json
 
 # Yarn cache
 .yarn/
+
+# Generated test report
+junit.xml
