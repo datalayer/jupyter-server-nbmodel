@@ -28,6 +28,16 @@ for i in range(1, 1000):
     time.sleep(1)
 ```
 
+Streaming outputs also works with `tqdm`.
+
+```py
+from tqdm import tqdm  # Standard tqdm, not tqdm.notebook
+import time
+
+for i in tqdm(range(100)):
+    time.sleep(0.1)  # Simulate long-running process
+```
+
 ## Requirements
 
 - Jupyter Server `>=2.0.1,<3`.
@@ -73,14 +83,14 @@ the frontend extension, check the frontend extension is installed:
 jupyter labextension list
 ```
 
-### Existing notebooks stop receiving live outputs
+### [WIP] Existing notebooks stop receiving live outputs
 
 Outputs are saved by the server and never appear in the notebook: the
 collaborative history of that document carries updates the browser cannot
-integrate. [RECONCILIATION.md](./RECONCILIATION.md) explains what was found,
-what writes the outputs in each mode, and the `outputRecovery` setting that
-works around it.
+integrate.
 
+[Reconciliation](https://jupyter-server-nbmodel.datalayer.tech/reconciliation) explains what was found,
+what writes the outputs in each mode, and the `outputRecovery` setting that works around it.
 
 ## How does it works
 
