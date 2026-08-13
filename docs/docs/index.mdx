@@ -13,9 +13,7 @@ import { useDocsSidebar } from '@docusaurus/plugin-content-docs/client';
 
 A Jupyter Server extension to execute code from the server-side NbModel to keep your sessions and outputs active.
 
-:::note
-
-<a href="https://datalayer.ai"><img alt="Datalayer" src="https://assets.datalayer.tech/datalayer-25.svg" height="22"/></a>
+:::info
 
 - **⚡ Durable execution** — the cells run on the server, not in the browser tab.
 - **🔄 Reload proof** — close the page, come back, the outputs are still arriving.
@@ -25,13 +23,17 @@ A Jupyter Server extension to execute code from the server-side NbModel to keep 
 **Free and open source, BSD 3-Clause** — install it in your own Jupyter, no
 account needed. Built and maintained by [**Datalayer**](https://datalayer.ai),
 where the same durable execution powers always-on Notebooks that humans and AI
-agents work in together. → **[datalayer.ai](https://datalayer.ai)**
+agents work in together.
+
+[![Discover Datalayer](https://img.shields.io/badge/Discover%20Datalayer-datalayer.ai-1ABC9C?style=for-the-badge&logo=jupyter&logoColor=white&labelColor=0E7C6B)](https://datalayer.ai)
+
+[![Install from PyPI](https://img.shields.io/badge/pip%20install-jupyter__server__nbmodel-306998?style=for-the-badge&logo=python&logoColor=white&labelColor=1E4064)](https://pypi.org/project/jupyter-server-nbmodel)
 
 :::
 
 :::warning[Work in progress]
 
-[Output reconciliation](./reconciliation.mdx) is needed for now to work around an
+[Output Reconciliation](./output-reconciliation.mdx) is needed for now to work around an
 issue in the Jupyter RTC stack. We are looking for contributors to help.
 
 :::
