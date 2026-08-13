@@ -8,6 +8,7 @@ import asyncio
 import json
 import threading
 import typing as t
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import partial
 
@@ -97,12 +98,107 @@ async def _get_ycell(
     return ycell
 
 
-def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) -> None:
+@dataclass
+class _StreamState:
+    """The stream this hook is writing into a cell, as the server sees it.
+
+    The kernel sends the raw bytes a terminal would receive, control
+    characters included, so the text of the cell is not their concatenation:
+    it is what a terminal would be showing. Holding the result here — rather
+    than deriving it from the cell — keeps it the authority on what the kernel
+    printed, whoever else writes to the shared document.
+    """
+
+    #: Name of the stream, ``stdout`` or ``stderr``.
+    name: str = ""
+    #: What the stream shows, control characters applied.
+    text: str = ""
+    #: Where the next character lands in ``text``.
+    cursor: int = 0
+
+    def reset(self, name: str = "", text: str = "") -> None:
+        self.name = name
+        self.text = text
+        self.cursor = len(text)
+
+
+def _apply_terminal_controls(text: str, new_text: str, cursor: int) -> tuple[str, int]:
+    """Write ``new_text`` at ``cursor``, applying ``\\b``, ``\\r`` and ``\\n``.
+
+    Mirrors ``Private.processText`` of JupyterLab, in
+    ``packages/outputarea/src/model.ts``, so that a cell executed on the server
+    shows what the same cell executed in the browser would show — a progress
+    bar overwriting its line rather than one line per update.
+
+    Args:
+        text: What the stream shows so far
+        new_text: The text the kernel just emitted
+        cursor: Where in ``text`` the new text starts landing
+
+    Returns:
+        The text the stream now shows, and the new cursor
+    """
+    chars = list(text)
+
+    # A control character left at the end of the text is a cursor made
+    # durable: whoever stored that text — a notebook saved mid-stream, or the
+    # browser applying an HTTP snapshot — could not store the cursor with it.
+    # Put it back in front of the new text and let the loop below apply it.
+    if chars and chars[-1] in ("\b", "\r"):
+        new_text = chars.pop() + new_text
+        cursor = min(max(cursor - 1, 0), len(chars))
+
+    for char in new_text:
+        match char:
+            case "\b":
+                if cursor > 0 and chars[cursor - 1] != "\n":
+                    del chars[cursor - 1]
+                    cursor -= 1
+            case "\r":
+                while cursor > 0 and chars[cursor - 1] != "\n":
+                    cursor -= 1
+            case "\n":
+                chars.append("\n")
+                cursor = len(chars)
+            case _:
+                if cursor < len(chars):
+                    chars[cursor] = char
+                else:
+                    chars.append(char)
+                cursor += 1
+
+    return "".join(chars), cursor
+
+
+def _stream_text(value: t.Any) -> str:
+    """The text of a stream output, however the shared document holds it."""
+    if isinstance(value, list):
+        return "".join(value)
+    return str(value) if value else ""
+
+
+def _common_prefix_length(left: str, right: str) -> int:
+    """How many leading characters the two texts share."""
+    shared = 0
+    for a, b in zip(left, right, strict=False):
+        if a != b:
+            break
+        shared += 1
+    return shared
+
+
+def _output_hook(
+    outputs: list[NotebookNode],
+    ycell: y.Map | None,
+    stream_state: _StreamState,
+    msg: dict,
+) -> None:
     """Callback on execution request when an output is emitted.
 
     Args:
         outputs: A list of previously emitted outputs
         ycell: The cell being executed
+        stream_state: The stream being written, across the messages of one execution
         msg: The output message
     """
     msg_type = msg["header"]["msg_type"]
@@ -115,51 +211,56 @@ def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) ->
             if msg_type == "stream":
                 from pycrdt import Map, Text
 
-                # Derive the authoritative merged stream from the kernel-side
-                # accumulator. The browser fallback may already have inserted
-                # this snapshot in the shared document, in which case this is
-                # intentionally a no-op rather than a second append.
-                expected_parts: list[str] = []
-                for emitted in reversed(outputs):
-                    if (
-                        emitted.get("output_type") != "stream"
-                        or emitted.get("name") != output["name"]
-                    ):
-                        break
-                    emitted_text = emitted.get("text", "")
-                    expected_parts.append(
-                        "".join(emitted_text) if isinstance(emitted_text, list) else emitted_text
-                    )
-                expected_text = "".join(reversed(expected_parts))
+                last_output = cell_outputs[-1] if len(cell_outputs) else None
+                if last_output is not None and last_output.get("name") != output["name"]:
+                    last_output = None
 
-                if cell_outputs and cell_outputs[-1].get("name") == output["name"]:
-                    last_output = cell_outputs[-1]
-                    previous_text = last_output["text"]
-                    actual_text = (
-                        str(previous_text)
-                        if isinstance(previous_text, Text)
-                        else "".join(previous_text)
-                        if isinstance(previous_text, list)
-                        else previous_text or ""
-                    )
-                    if actual_text == expected_text or actual_text.startswith(expected_text):
-                        return
-                    if isinstance(previous_text, Text):
-                        suffix = (
-                            expected_text[len(actual_text) :]
-                            if expected_text.startswith(actual_text)
-                            else output["text"]
-                        )
-                        previous_text += suffix
-                    else:
-                        with cell_outputs.doc.transaction():
-                            last_output["text"] = Text(expected_text)
-                else:
+                if last_output is None:
+                    stream_state.reset(output["name"])
+                elif stream_state.name != output["name"]:
+                    # The cell already carries this stream although this hook
+                    # has not written it: a resumed execution, or the browser
+                    # recovery. Continue that text instead of starting a
+                    # second output beside it.
+                    stream_state.reset(output["name"], _stream_text(last_output["text"]))
+
+                stream_state.text, stream_state.cursor = _apply_terminal_controls(
+                    stream_state.text, output["text"], stream_state.cursor
+                )
+                expected_text = stream_state.text
+
+                if last_output is None:
                     with cell_outputs.doc.transaction():
                         youtput = dict(output)
-                        youtput["text"] = Text(output["text"])
+                        youtput["text"] = Text(expected_text)
                         cell_outputs.append(Map(youtput))
+                    return
+
+                # The browser fallback may already have inserted this snapshot
+                # in the shared document, in which case there is nothing to do
+                # rather than a second append.
+                previous_text = last_output["text"]
+                actual_text = _stream_text(previous_text)
+                if actual_text == expected_text or actual_text.startswith(expected_text):
+                    return
+
+                if isinstance(previous_text, Text):
+                    # Only what changed: a stream that grows is appended to,
+                    # and one that a carriage return rewrote has its tail
+                    # replaced. Never the whole value — restructuring a nested
+                    # Yjs value is what once left a notebook empty.
+                    shared = _common_prefix_length(actual_text, expected_text)
+                    with cell_outputs.doc.transaction():
+                        if shared < len(actual_text):
+                            del previous_text[shared:]
+                        previous_text += expected_text[shared:]
+                else:
+                    with cell_outputs.doc.transaction():
+                        last_output["text"] = Text(expected_text)
             else:
+                # Any other output ends the stream; the next one starts a new
+                # output rather than writing into this one.
+                stream_state.reset()
                 # Pending HTTP reconciliation may have inserted this complete
                 # non-stream output before the YDoc update reaches the server.
                 # Avoid persisting the same execute_result/error twice.
@@ -171,6 +272,7 @@ def _output_hook(outputs: list[NotebookNode], ycell: y.Map | None, msg: dict) ->
     elif msg_type == "clear_output":
         # FIXME msg.content.wait - if true should clear at the next message
         outputs.clear()
+        stream_state.reset()
         if ycell is not None:
             del ycell["outputs"][:]
     elif msg_type == "update_display_data":
@@ -326,7 +428,7 @@ async def _execute_snippet(
         progress["outputs"] = outputs
     # FIXME we don't check if the session is consistent (aka the kernel is linked to the document)
     #   - should we?
-    output_hook = partial(_output_hook, outputs, ycell)
+    output_hook = partial(_output_hook, outputs, ycell, _StreamState())
     if not getattr(client, "_server_nbmodel_remote", False):
         reply = await ensure_async(
             client.execute_interactive(

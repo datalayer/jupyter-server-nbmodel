@@ -9,8 +9,31 @@ import { useDocsSidebar } from '@docusaurus/plugin-content-docs/client';
 
 # 🪐 📄 Jupyter Server Nbmodel
 
-> Stop losing your outputs due to session timeouts or network loss.
+> Stop losing your outputs to session timeouts or network loss.
 
 A Jupyter Server extension to execute code from the server-side NbModel to keep your sessions and outputs active.
+
+:::note
+
+<a href="https://datalayer.ai"><img alt="Datalayer" src="https://assets.datalayer.tech/datalayer-25.svg" height="22"/></a>
+
+- **⚡ Durable execution** — the cells run on the server, not in the browser tab.
+- **🔄 Reload proof** — close the page, come back, the outputs are still arriving.
+- **🤖 Agent ready** — a REST API to run cells and read outputs, so an agent works
+  from the same Notebook you do.
+
+**Free and open source, BSD 3-Clause** — install it in your own Jupyter, no
+account needed. Built and maintained by [**Datalayer**](https://datalayer.ai),
+where the same durable execution powers always-on Notebooks that humans and AI
+agents work in together. → **[datalayer.ai](https://datalayer.ai)**
+
+:::
+
+:::warning[Work in progress]
+
+[Output reconciliation](./reconciliation.mdx) is needed for now to work around an
+issue in the Jupyter RTC stack. We are looking for contributors to help.
+
+:::
 
 <DocCardList items={useDocsSidebar().items} />
