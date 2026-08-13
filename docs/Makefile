@@ -41,4 +41,4 @@ deploy: build ## deploy
 		aws cloudfront create-invalidation \
 		--distribution-id E1YHLNGDXV5LKB \
 		--paths "/*"
-echo open ✨  https://jupyter-server-nbmodel.datalayer.tech
+	@echo open ✨ https://jupyter-server-nbmodel.datalayer.tech

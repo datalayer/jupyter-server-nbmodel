@@ -31,7 +31,7 @@ const items = [
     Svg: require('../../static/img/react-js2.svg').default,
     description: (
       <>
-        If you are sick with the JupyterLab frontend limits and want to leverage the React.js developers and developement eco-system, we have something for you.
+        If you are sick with the JupyterLab frontend limits and want to leverage the React.js developers and development eco-system, we have something for you.
       </>
     ),
   },

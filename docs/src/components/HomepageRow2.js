@@ -22,7 +22,7 @@ const items = [
     Svg: require('../../static/img/building-construction.svg').default,
     description: (
       <>
-        You build your custom Data Product with well crafted components. Have a look at the <a href="https://storybook.datalayer.tech" target="_blank">Storybook</a>.
+        You build your custom Data Product with well crafted components. Have a look at the <a href="https://storybook.datalayer.tech" target="_blank" rel="noopener noreferrer">Storybook</a>.
       </>
     ),
   },
@@ -31,7 +31,7 @@ const items = [
     Svg: require('../../static/img/shield.svg').default,
     description: (
       <>
-        We are working towards entreprise-grade security certifications - ISO 27001, SOC2 type 2, GDPR and ISO 42001.
+        We are working towards enterprise-grade security certifications - ISO 27001, SOC2 type 2, GDPR and ISO 42001.
       </>
     ),
   },
