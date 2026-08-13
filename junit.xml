@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="12" failures="0" errors="0" time="1.796">
-  <testsuite name="jupyter-server-nbmodel" errors="0" failures="0" skipped="0" timestamp="2026-08-13T04:30:46" time="1.192" tests="12">
-    <testcase classname="jupyter-server-nbmodel restores status through the standard kernel connection" name="jupyter-server-nbmodel restores status through the standard kernel connection" time="0.004">
+<testsuites name="jest tests" tests="12" failures="0" errors="0" time="3.221">
+  <testsuite name="jupyter-server-nbmodel" errors="0" failures="0" skipped="0" timestamp="2026-08-13T04:53:23" time="1.181" tests="12">
+    <testcase classname="jupyter-server-nbmodel restores status through the standard kernel connection" name="jupyter-server-nbmodel restores status through the standard kernel connection" time="0.011">
     </testcase>
     <testcase classname="jupyter-server-nbmodel restores the execution state from the existing kernel model" name="jupyter-server-nbmodel restores the execution state from the existing kernel model" time="0.001">
     </testcase>
-    <testcase classname="jupyter-server-nbmodel keeps the stream an interrupt stopped and adds the error" name="jupyter-server-nbmodel keeps the stream an interrupt stopped and adds the error" time="0.001">
+    <testcase classname="jupyter-server-nbmodel keeps the stream an interrupt stopped and adds the error" name="jupyter-server-nbmodel keeps the stream an interrupt stopped and adds the error" time="0.008">
     </testcase>
-    <testcase classname="jupyter-server-nbmodel never shortens a stream the cell already shows" name="jupyter-server-nbmodel never shortens a stream the cell already shows" time="0">
+    <testcase classname="jupyter-server-nbmodel never shortens a stream the cell already shows" name="jupyter-server-nbmodel never shortens a stream the cell already shows" time="0.001">
     </testcase>
-    <testcase classname="jupyter-server-nbmodel replaces outputs that cannot be reached by appending" name="jupyter-server-nbmodel replaces outputs that cannot be reached by appending" time="0.001">
+    <testcase classname="jupyter-server-nbmodel replaces outputs that cannot be reached by appending" name="jupyter-server-nbmodel replaces outputs that cannot be reached by appending" time="0">
     </testcase>
-    <testcase classname="jupyter-server-nbmodel persists the request identity needed after refresh" name="jupyter-server-nbmodel persists the request identity needed after refresh" time="0">
+    <testcase classname="jupyter-server-nbmodel persists the request identity needed after refresh" name="jupyter-server-nbmodel persists the request identity needed after refresh" time="0.001">
     </testcase>
-    <testcase classname="jupyter-server-nbmodel distinguishes live executions from requests inherited after refresh" name="jupyter-server-nbmodel distinguishes live executions from requests inherited after refresh" time="0.001">
+    <testcase classname="jupyter-server-nbmodel distinguishes live executions from requests inherited after refresh" name="jupyter-server-nbmodel distinguishes live executions from requests inherited after refresh" time="0">
     </testcase>
-    <testcase classname="jupyter-server-nbmodel serializes request submission to the same kernel" name="jupyter-server-nbmodel serializes request submission to the same kernel" time="0">
+    <testcase classname="jupyter-server-nbmodel serializes request submission to the same kernel" name="jupyter-server-nbmodel serializes request submission to the same kernel" time="0.001">
     </testcase>
-    <testcase classname="jupyter-server-nbmodel recognizes a shorter stream snapshot as a prefix" name="jupyter-server-nbmodel recognizes a shorter stream snapshot as a prefix" time="0.001">
+    <testcase classname="jupyter-server-nbmodel recognizes a shorter stream snapshot as a prefix" name="jupyter-server-nbmodel recognizes a shorter stream snapshot as a prefix" time="0">
     </testcase>
     <testcase classname="jupyter-server-nbmodel does not erase output for an initial empty snapshot" name="jupyter-server-nbmodel does not erase output for an initial empty snapshot" time="0">
     </testcase>
-    <testcase classname="jupyter-server-nbmodel does not replace output with an older stream snapshot" name="jupyter-server-nbmodel does not replace output with an older stream snapshot" time="0">
+    <testcase classname="jupyter-server-nbmodel does not replace output with an older stream snapshot" name="jupyter-server-nbmodel does not replace output with an older stream snapshot" time="0.001">
     </testcase>
     <testcase classname="jupyter-server-nbmodel appends only the missing stream suffix" name="jupyter-server-nbmodel appends only the missing stream suffix" time="0">
     </testcase>

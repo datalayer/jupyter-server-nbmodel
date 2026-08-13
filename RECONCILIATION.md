@@ -26,10 +26,47 @@ browser writes nothing; it observes those updates like any other collaborative
 change. This is the behaviour that existed before the recovery was written, and
 it is what the extension does out of the box again.
 
-The one write the browser makes in this mode is the **clear at the start of an
-execution**: running a cell again empties its outputs, which JupyterLab does in
-the executor this extension replaces, and the server does on its side. It is a
-replacement of an empty array, and it is the same gesture in both modes.
+No output reaches a cell from the browser in this mode. Everything the recovery
+added is behind the setting:
+
+| What the browser would write                                     | Written when                                                                 |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| The outputs carried by a pending `202` answer                    | `outputRecovery`                                                             |
+| The outputs, execution count and idle state of the final answer  | `outputRecovery`                                                             |
+| The identity of the running request, in the metadata of the cell | `outputRecovery`                                                             |
+| The outputs of a request a reloaded page resumed                 | `outputRecovery` — the restoring plugin returns before reading anything else |
+| The `busy`/`idle` status a resumed request restores              | `outputRecovery`, through the same early return                              |
+
+So a cell receives its outputs exactly as it did before the recovery was
+written: one `Y.Text.__iadd__` per stream chunk, one `append` per new output,
+and no snapshot, no `setOutputs`, no deletion. The `outputs` field of the
+answers is still parsed with the setting off, but only to produce the
+`Execution completed` diagnostic; it is never applied.
+
+### What both modes do, and the recovery did not change
+
+Four things apply whatever the setting says. They are the differences between
+the default mode and the extension as it stood before the recovery, and none of
+them writes an output:
+
+1. **The clear at the start of an execution.** Running a cell again empties its
+   outputs, which JupyterLab does in the executor this extension replaces, and
+   which the server does on its side as well. Without it a cell that is run
+   again keeps what it had and the new outputs are appended underneath. It goes
+   through `OutputAreaModel.clear`, so the shared document sees a range delete
+   rather than a replaced array, and it is guarded: failing to clear must never
+   keep a cell from running.
+2. **The submission queue.** Submissions are serialised per kernel so that
+   cells reach the kernel in the order they were run. That is a separate fix
+   (`fix: cell exec order`), landed after the recovery, and an ordering
+   guarantee has no reason to depend on an output setting.
+3. **Two guards.** A cell run without a kernel id clears its execution instead
+   of posting to `api/kernels/undefined/execute`, and the request carries the
+   path of the notebook, which the server uses to attribute a request to a
+   document.
+4. **The diagnostics.** The count of shared-cell updates with its first three
+   `Received shared cell update` lines, the `Execution completed` line, and the
+   body of each `202` being parsed rather than discarded.
 
 ### With the recovery on: still incremental, one exception
 
