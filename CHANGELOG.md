@@ -2,6 +2,12 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.2.4
+
+No merged PRs
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.2.3
 
 ([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/v0.2.2...2e5f5be3b4da9966aea583edd6603afe52ab224e))
@@ -19,8 +25,6 @@ See [our definition of contributors](https://github-activity.readthedocs.io/en/l
 ([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2026-08-10&to=2026-08-13&type=c))
 
 @echarles ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aecharles+updated%3A2026-08-10..2026-08-13&type=Issues))
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.2.2
 
