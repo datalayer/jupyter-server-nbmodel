@@ -1,3 +1,5 @@
+<a href="https://datalayer.ai"><img alt="Datalayer" src="https://assets.datalayer.tech/datalayer-25.svg" height="22"/></a>
+
 [![Become a Sponsor](https://img.shields.io/static/v1?label=Become%20a%20Sponsor&message=%E2%9D%A4&logo=GitHub&style=flat&color=1ABC9C)](https://github.com/sponsors/datalayer)
 [![Github Actions Status](https://github.com/datalayer/jupyter-server-nbmodel/workflows/Build/badge.svg)](https://github.com/datalayer/jupyter-server-nbmodel/actions/workflows/build.yml)
 
@@ -5,10 +7,7 @@
 
 # 🪐 📄 Jupyter Server Nbmodel
 
-<table>
-<tr><td>
-
-<a href="https://datalayer.ai"><img alt="Datalayer" src="https://assets.datalayer.tech/datalayer-25.svg" height="22"/></a>
+---
 
 [![Built and maintained by Datalayer](https://img.shields.io/badge/Built%20and%20maintained%20by-Datalayer%20%C2%B7%20datalayer.ai-1ABC9C?style=for-the-badge&logo=jupyter&logoColor=white&labelColor=0E7C6B)](https://datalayer.ai)
 
@@ -24,11 +23,15 @@ costs you an execution — and the outputs are still there when you come back.
 - **🤖 Agent ready** — a REST API to run cells and read outputs, so an agent works
   from the same Notebook you do.
 
-[![HOT NEWS](https://img.shields.io/badge/%F0%9F%94%A5%20HOT%20NEWS-Hosted%20MCP%20is%20live-E74C3C?style=for-the-badge&labelColor=922B21)](https://jupyter-mcp-server.datalayer.tech/hosted) [![Claude Code plugin](https://img.shields.io/badge/%F0%9F%A4%96%20Claude%20Code-plugin%20available-8E44AD?style=for-the-badge&labelColor=5B2C6F)](https://github.com/datalayer/jupyter-mcp-server/tree/main/ext/claude-plugin)
+[![HOT NEWS](https://img.shields.io/badge/%F0%9F%94%A5%20HOT%20NEWS-Hosted%20MCP%20is%20live-E74C3C?style=for-the-badge&labelColor=922B21)](https://jupyter-mcp-server.datalayer.tech/hosted)
 
 **Your agent can now reach these Notebooks without running anything.** Datalayer hosts a
 Jupyter MCP endpoint at **`https://mcp.datalayer.run/mcp`** — durable execution included, so a
-cell keeps running after the agent disconnects. Claude Code connects with one command through
+cell keeps running after the agent disconnects.
+
+[![Claude Code plugin](https://img.shields.io/badge/%F0%9F%A4%96%20Claude%20Code-plugin%20available-8E44AD?style=for-the-badge&labelColor=5B2C6F)](https://github.com/datalayer/jupyter-mcp-server/tree/main/ext/claude-plugin)
+ 
+Claude Code connects with one command through
 the [Datalayer plugin](https://github.com/datalayer/jupyter-mcp-server/tree/main/ext/claude-plugin).
 
 ---
@@ -38,8 +41,6 @@ Built and maintained by [**Datalayer**](https://datalayer.ai), where the same du
 powers always-on Notebooks that humans and AI agents work in together.
 
 [![Install from PyPI](https://img.shields.io/badge/pip%20install-jupyter__server__nbmodel-306998?style=for-the-badge&logo=python&logoColor=white&labelColor=1E4064)](https://pypi.org/project/jupyter-server-nbmodel) [![Discover Datalayer](https://img.shields.io/badge/%E2%86%92%20Discover%20Datalayer-datalayer.ai-1ABC9C?style=for-the-badge&labelColor=0E7C6B)](https://datalayer.ai)
-</td></tr>
-</table>
 
 <p align="center">
   <img src="https://assets.datalayer.tech/jupyter-server-nbmodel/nbmodel.gif" alt="Jupyter Server Nbmodel Demo" width="800"/>
@@ -119,8 +120,7 @@ jupyter labextension list
 
 ### Existing notebooks stop receiving live outputs
 
-<table>
-<tr><td>
+---
 
 ![Work in progress](https://img.shields.io/badge/%E2%9A%A0%EF%B8%8F-Work%20in%20progress-E67E22?style=for-the-badge&labelColor=A0522D)
 
@@ -131,8 +131,7 @@ integrate.
 [**Reconciliation**](https://jupyter-server-nbmodel.datalayer.tech/output-reconciliation) explains what was
 found, what writes the outputs in each mode, and the `outputRecovery` setting that works around it.
 
-</td></tr>
-</table>
+---
 
 ## How does it works
 
@@ -223,8 +222,7 @@ sequenceDiagram
     Server-->>-Frontend: Status 200 & { execution_count, status, outputs }
 ```
 
-<table>
-<tr><td>
+---
 
 ![Note](https://img.shields.io/badge/%E2%84%B9%EF%B8%8F-Note-3498DB?style=for-the-badge&labelColor=1B5E8A)
 
@@ -235,8 +233,7 @@ eventually identical with the frontends (document updates are not instantaneous)
 The `ExecutionStack` maintains an execution queue per kernel to ensure execution
 order.
 
-</td></tr>
-</table>
+---
 
 ## Contributing
 
