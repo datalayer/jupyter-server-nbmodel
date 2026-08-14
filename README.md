@@ -7,8 +7,6 @@
 
 # 🪐 📄 Jupyter Server Nbmodel
 
----
-
 [![Built and maintained by Datalayer](https://img.shields.io/badge/Built%20and%20maintained%20by-Datalayer%20%C2%B7%20datalayer.ai-1ABC9C?style=for-the-badge&logo=jupyter&logoColor=white&labelColor=0E7C6B)](https://datalayer.ai)
 
 **Stop losing your outputs to session timeouts or network loss.**
