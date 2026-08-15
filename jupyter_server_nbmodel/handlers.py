@@ -236,7 +236,8 @@ def _read_user_settings() -> dict:
     except OSError:
         return {}
     try:
-        return json.loads(raw)
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else {}
     except ValueError:
         pass
     try:
@@ -256,7 +257,11 @@ class OutputRecoverySettingHandler(ExtensionHandlerMixin, APIHandler):
     def get(self) -> None:
         settings = _read_user_settings()
         value = settings.get(OUTPUT_RECOVERY_KEY, OUTPUT_RECOVERY_DEFAULT)
-        self.finish(json.dumps({OUTPUT_RECOVERY_KEY: bool(value)}))
+        if not isinstance(value, bool):
+            # A hand-edited file may hold "false" or worse; a string is
+            # truthy, so anything but a boolean answers the schema default.
+            value = OUTPUT_RECOVERY_DEFAULT
+        self.finish(json.dumps({OUTPUT_RECOVERY_KEY: value}))
 
     @tornado.web.authenticated
     def put(self) -> None:

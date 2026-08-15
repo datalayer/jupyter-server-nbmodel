@@ -46,6 +46,24 @@ async def test_get_reads_the_lab_settings_file(settings_dir, jp_fetch):
     assert json.loads(response.body) == {"outputRecovery": True}
 
 
+async def test_a_non_boolean_in_the_file_answers_the_default(settings_dir, jp_fetch):
+    # "false" is a truthy string: anything but a boolean must read as the
+    # schema default, never as enabled.
+    path = _settings_file(settings_dir)
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"outputRecovery": "false"}))
+    response = await jp_fetch("api", "nbmodel", "settings", "output-recovery")
+    assert json.loads(response.body) == {"outputRecovery": False}
+
+
+async def test_a_non_object_settings_file_answers_the_default(settings_dir, jp_fetch):
+    path = _settings_file(settings_dir)
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(["not", "an", "object"]))
+    response = await jp_fetch("api", "nbmodel", "settings", "output-recovery")
+    assert json.loads(response.body) == {"outputRecovery": False}
+
+
 async def test_put_persists_where_the_lab_reads(settings_dir, jp_fetch):
     response = await jp_fetch(
         "api",

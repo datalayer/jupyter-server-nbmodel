@@ -14,19 +14,19 @@
 Your cells run on the server, so a reload, a closed laptop or a dropped connection no longer
 costs you an execution — and the outputs are still there when you come back.
 
-📖 [Documentation](https://jupyter-server-nbmodel.datalayer.tech) &nbsp;·&nbsp; 🔀 [Output reconciliation](https://jupyter-server-nbmodel.datalayer.tech/reconciliation) &nbsp;·&nbsp; 💬 [Community](https://jupyter-server-nbmodel.datalayer.tech/community)
+📖 [Documentation](https://jupyter-server-nbmodel.datalayer.tech) &nbsp;·&nbsp; 🔀 [Output reconciliation](https://jupyter-server-nbmodel.datalayer.tech/output-reconciliation) &nbsp;·&nbsp; 💬 [Community](https://jupyter-server-nbmodel.datalayer.tech/community)
 
 - **⚡ Durable execution** — a cell keeps running with no browser connected to it.
 - **🖥️ Terminal-faithful outputs** — progress bars overwrite their line, as they should.
 - **🤖 Agent ready** — a REST API to run cells and read outputs, so an agent works
   from the same Notebook you do.
 
-[![HOT NEWS](https://img.shields.io/badge/%F0%9F%94%A5%20HOT%20NEWS-Hosted%20MCP%20is%20live-E74C3C?style=for-the-badge&labelColor=922B21)](https://jupyter-mcp-server.datalayer.tech/hosted)
+[![HOT NEWS](https://img.shields.io/badge/%F0%9F%94%A5%20HOT%20NEWS-Managed%20MCP%20is%20live-E74C3C?style=for-the-badge&labelColor=922B21)](https://datalayer.ai/docs/access-mcp)
 
-**Your agent can now reach these Notebooks without running anything.** Datalayer hosts a
-Jupyter MCP endpoint at **`https://mcp.datalayer.run/mcp`** — durable execution included, so a cell keeps running after the agent disconnects.
+**Your agent can now reach these Notebooks without running anything.** The Managed
+Jupyter MCP Server, operated by Datalayer, is at **`https://mcp.datalayer.run/mcp`** — durable execution included, so a cell keeps running after the agent disconnects.
 
-→ [**Hosted Jupyter MCP Server**](https://jupyter-mcp-server.datalayer.tech/hosted)
+→ [**Managed Jupyter MCP Server**](https://datalayer.ai/docs/access-mcp)
 
 [![Claude Code plugin](https://img.shields.io/badge/%F0%9F%A4%96%20Claude%20Code-plugin%20available-8E44AD?style=for-the-badge&labelColor=5B2C6F)](https://github.com/datalayer/jupyter-mcp-server/tree/main/ext/claude-plugin)
  
