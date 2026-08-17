@@ -1,6 +1,6 @@
 {
     "name": "@datalayer/jupyter-server-nbmodel",
-    "version": "0.2.5",
+    "version": "0.2.6",
     "description": "A Jupyter Server extension to execute code cell on the server.",
     "keywords": [
         "jupyter",
