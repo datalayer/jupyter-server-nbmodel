@@ -49,8 +49,9 @@
         "stylelint:check": "stylelint --cache \"style/**/*.css\"",
         "test": "jest --coverage",
         "watch": "run-p watch:src watch:labextension",
-        "watch:src": "tsc -w --sourceMap",
-        "watch:labextension": "jupyter-builder watch ."
+        "watch:lib": "tsc -w --sourceMap",
+        "watch:labextension": "jupyter-builder watch .",
+        "watch:labextension:dev": "jupyter-builder watch --development True ."
     },
     "dependencies": {
         "@jupyterlab/application": "^4.2.0",
