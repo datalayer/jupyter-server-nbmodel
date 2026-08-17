@@ -222,6 +222,7 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
               cellId,
               documentId,
               documentPath,
+              status: data['status'],
               sharedModelUpdates,
               serverOutputCount: serverOutputs.length,
               sharedOutputCount: sharedOutputs.length,
@@ -233,7 +234,19 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
             // was unavailable (no collaboration extension) or could not be
             // integrated (for example an invalid historical YStore), reconcile
             // the completed result returned by the REST endpoint in the client.
-            if (recoverOutputs && (outputsMissing || executionCountMissing)) {
+            //
+            // A cell whose shared model heard NOTHING during the execution is
+            // reconciled whatever the recovery setting says: the server wrote
+            // its outputs into a shared document this editor evidently does
+            // not receive, and the reply is then the only way the user sees
+            // them at all. The recovery setting keeps governing the richer
+            // case where the shared path delivered and the reply merely
+            // completes it.
+            const sharedPathSilent = sharedModelUpdates === 0;
+            if (
+              (recoverOutputs || sharedPathSilent) &&
+              (outputsMissing || executionCountMissing)
+            ) {
               console.warn(
                 '[jupyter-server-nbmodel] Reconciling missing server execution update',
                 {

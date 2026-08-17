@@ -62,33 +62,46 @@ async def _get_ycell(
         )
         get_logger().debug(msg)
         return None
-    notebook: YNotebook | None = None
+    # Neither identifier is fully reliable on its own: the document_id names a
+    # collaboration room that may predate a server restart, while the
+    # document_path comes from the kernel session, whose path can be a
+    # placeholder or name a different file than the executing document (several
+    # Datalayer editors share one kernel session). Resolve candidates from both
+    # and keep the first document that actually contains the executing cell.
+    ycell: y.Map | None = None
+    candidates: list[YNotebook] = []
+    if document_id is not None:
+        candidate = await ydoc.get_document(room_id=document_id, copy=False)
+        if candidate is not None:
+            candidates.append(candidate)
     if isinstance(document_path, str) and document_path:
-        # The document_id is collaborative state and may refer to a room from
-        # before a server restart. Resolve the current live room from the file
-        # path first so updates reach the browser that is actually connected.
-        notebook = await ydoc.get_document(
+        candidate = await ydoc.get_document(
             path=document_path,
             content_type="notebook",
             file_format="json",
             copy=False,
         )
-    if notebook is None and document_id is not None:
-        notebook = await ydoc.get_document(room_id=document_id, copy=False)
-    if notebook is None:
+        if candidate is not None:
+            candidates.append(candidate)
+    if not candidates:
         msg = f"Document at path {document_path!r} with ID {document_id!r} not found."
         get_logger().warning(msg)
         return None
-    ycells = filter(lambda c: c["id"] == cell_id, notebook.ycells)
-    ycell = next(ycells, None)
+    for candidate in candidates:
+        ycells = filter(lambda c: c["id"] == cell_id, candidate.ycells)
+        ycell = next(ycells, None)
+        if ycell is not None:
+            # Check if there is more than one cell
+            if next(ycells, None) is not None:
+                get_logger().warning("Multiple cells have the same ID '%s'.", cell_id)
+            break
     if ycell is None:
-        msg = f"Cell with ID {cell_id} not found in document {document_id}."
+        msg = (
+            f"Cell with ID {cell_id} not found in document at path {document_path!r} "
+            f"with ID {document_id!r}."
+        )
         get_logger().warning(msg)
         return None
-    else:
-        # Check if there is more than one cell
-        if next(ycells, None) is not None:
-            get_logger().warning("Multiple cells have the same ID '%s'.", cell_id)
     if ycell["cell_type"] != "code":
         msg = f"Cell with ID {cell_id} of document {document_id} is not of type code."
         get_logger().error(msg)
@@ -475,6 +488,19 @@ async def _execute_snippet(
                 "timestamp": execution_end_time,
             },
         )
+    # One line per execution, always: which document received the outputs and
+    # how many the kernel emitted. This is the line to look for when a cell
+    # runs and shows nothing — it says on which side the outputs were lost.
+    get_logger().info(
+        "Executed cell %s of document %r (path %r): status=%s, outputs=%d, "
+        "written to shared document=%s",
+        (metadata or {}).get("cell_id"),
+        (metadata or {}).get("document_id"),
+        (metadata or {}).get("document_path"),
+        reply_content["status"],
+        len(outputs),
+        ycell is not None,
+    )
     return {
         "status": reply_content["status"],
         "execution_count": reply_content.get("execution_count"),
