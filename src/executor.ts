@@ -115,7 +115,22 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
           const code = cell.model.sharedModel.getSource();
           const cellId = cell.model.sharedModel.getId();
           const documentId = notebook.sharedModel.getState('document_id');
-          const documentPath = sessionContext.session?.path;
+          /*
+           * The path of the session, when it names a file of the server.
+           *
+           * An editor with no file of its own — a notebook of a Datalayer
+           * space, one built from a model — still needs a session, and a
+           * session is named by a path: those are kept under `.datalayer/`
+           * and name nothing on disk. Sending one makes the server look up a
+           * document at a path it will never find, index a file id for it and
+           * warn about it, all before falling back to the identifier of the
+           * room, which is what could answer from the start. Only a path that
+           * names something is worth sending.
+           */
+          const sessionPath = sessionContext.session?.path;
+          const documentPath = sessionPath?.startsWith('.datalayer/')
+            ? undefined
+            : sessionPath;
           const { recordTiming } = notebookConfig;
           const kernelSettings = sessionContext.session?.kernel?.serverSettings;
           const remoteServer =
