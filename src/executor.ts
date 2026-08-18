@@ -196,7 +196,35 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
             }
           };
           sharedCodeCell.changed.connect(onSharedModelChanged);
-          const recoverOutputs = isOutputRecoveryEnabled();
+          /*
+           * A document the server cannot write into has no other path.
+           *
+           * The recovery is asked for rather than assumed because it makes
+           * this extension a second writer of the shared document. That
+           * caution is meaningless when there is no shared document for the
+           * server to write into at all: a notebook of a Datalayer space is
+           * collaborated on through the spacer, names no room of this server
+           * and no file of it, so nothing streams into it — the outputs of a
+           * cell reach the page that asked for them, and a page that reloads
+           * mid-run inherits nothing. The answers of the server are then the
+           * only way its outputs are ever seen, during the run and after it.
+           *
+           * The path is what says so, and the identifier is not: a notebook of
+           * a space HAS a document identifier — the one of its room on the
+           * spacer — which this server cannot resolve to anything, so keying
+           * on it left the recovery off for the very notebooks that have
+           * nothing else. A path is sent only when it names a file of this
+           * server; see where it is built above.
+           */
+          const recoverOutputs = isOutputRecoveryEnabled() || !documentPath;
+          console.info('[jupyter-server-nbmodel] Executing cell', {
+            cellId,
+            documentId,
+            documentPath,
+            sessionPath,
+            recoverOutputs,
+            settingEnabled: isOutputRecoveryEnabled()
+          });
           if (recoverOutputs) {
             markClientOwnedExecution(cell as CodeCell);
           }
