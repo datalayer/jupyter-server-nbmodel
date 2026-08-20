@@ -156,10 +156,17 @@ async def test_pending_execute_returns_stream_outputs(
     jp_serverapp,
 ):
     """Pending request polling exposes output before execution completes."""
+    # The cell prints, then stays busy long enough to be caught at it.
+    #
+    # The two numbers here and in the polling loop below are a window, not a
+    # duration: the stream is observable between the first print and the end
+    # of the sleep, and the test has to look inside it. Tightened to a second,
+    # a loaded machine spent that second merely starting the kernel, saw no
+    # output yet, and failed a race rather than a behaviour.
     snippet = (
         "import time\n"
         "print('streamed before completion', flush=True)\n"
-        "time.sleep(1.5)\n"
+        "time.sleep(5)\n"
         "print('completed', flush=True)"
     )
     notebook = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell(source=snippet)])
@@ -204,7 +211,11 @@ async def test_pending_execute_returns_stream_outputs(
     }
 
     pending_outputs = []
-    for _ in range(10):
+    # Up to four seconds, against the five the cell stays busy: long enough
+    # for a slow kernel to start, short enough that the execution is still
+    # pending when the last poll is made. It stops at the first output, so
+    # the usual run costs a fraction of that.
+    for _ in range(40):
         await asyncio.sleep(0.1)
         response = await jp_fetch(location, raise_error=False)
         assert response.code == 202, "Execution completed before its stream was observed."
