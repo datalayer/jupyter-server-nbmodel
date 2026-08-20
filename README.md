@@ -73,7 +73,7 @@ for i in tqdm(range(100)):
     time.sleep(0.1)  # Simulate long-running process
 ```
 
-We are working to make it work also with IPyWidgets.
+We are working to make it work with ipywidgets as well.
 
 ```py
 from tqdm.notebook import tqdm

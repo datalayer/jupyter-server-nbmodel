@@ -279,8 +279,7 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
                 `executionCountMissing=${executionCountMissing} ` +
                 `recoverOutputs=${recoverOutputs} ` +
                 `documentId=${String(documentId)} ` +
-                `documentPath=${String(documentPath)} ` +
-                `body=${JSON.stringify(data).slice(0, 300)}`
+                `documentPath=${String(documentPath)}`
             );
 
             // Server-side collaboration is the streaming path. If its update

@@ -110,6 +110,19 @@ async function requestServerWithState(
             const kernelUrl = url.match(/^(.*\/api\/kernels\/[^/?]+)/);
             replyUrl = kernelUrl ? `${kernelUrl[1]}/input` : '';
           }
+          if (!replyUrl) {
+            // Neither the header nor the shape of the polled URL says where
+            // the input goes. Joining an empty path would POST the reply to
+            // the root of the server, so the execution fails here instead.
+            promise.reject(
+              new Error(
+                'The kernel asked for an input, and where to send it could ' +
+                  'not be determined: no Location header, and the polled ' +
+                  `URL names no kernel (${url}).`
+              )
+            );
+            return;
+          }
           if (!replyUrl.startsWith(settings.baseUrl)) {
             replyUrl = URLExt.join(settings.baseUrl, replyUrl);
           }
