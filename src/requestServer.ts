@@ -29,6 +29,17 @@ interface IOutputReconciliationState {
   /** Whether the outputs of the pending answers are read into the cell. */
   recoverOutputs?: boolean;
   serverOutputs?: any[];
+  /**
+   * Where the request is polled, read from the BODY of the answers.
+   *
+   * The server names it in the `Location` header too, but that header is
+   * not CORS-safelisted: a page served from another origin — the React
+   * application against a local Jupyter server — reads `null` there, fell
+   * back to re-GETting the execute URL, and took the pending-requests
+   * listing it got back as the final result of the execution. The body is
+   * readable from any origin.
+   */
+  requestUrl?: string;
 }
 
 interface IRequestProgressPayload {
@@ -51,6 +62,9 @@ async function reconcilePendingOutputs(
   }
   if (payload.request_id && payload.kernel_id) {
     const requestUrl = response.headers.get('Location') ?? payload.request_url;
+    if (requestUrl) {
+      state.requestUrl = requestUrl;
+    }
     // The metadata is what a reloaded page resumes from; it is only written
     // when that recovery is in use.
     if (requestUrl && state.recoverOutputs) {
@@ -90,6 +104,25 @@ async function requestServerWithState(
       if (!response.ok) {
         if (response.status === 300) {
           let replyUrl = response.headers.get('Location') || '';
+          if (!replyUrl) {
+            // The header is not CORS-safelisted; the input endpoint of the
+            // kernel is fixed, so it is derived from the URL being polled.
+            const kernelUrl = url.match(/^(.*\/api\/kernels\/[^/?]+)/);
+            replyUrl = kernelUrl ? `${kernelUrl[1]}/input` : '';
+          }
+          if (!replyUrl) {
+            // Neither the header nor the shape of the polled URL says where
+            // the input goes. Joining an empty path would POST the reply to
+            // the root of the server, so the execution fails here instead.
+            promise.reject(
+              new Error(
+                'The kernel asked for an input, and where to send it could ' +
+                  'not be determined: no Location header, and the polled ' +
+                  `URL names no kernel (${url}).`
+              )
+            );
+            return;
+          }
           if (!replyUrl.startsWith(settings.baseUrl)) {
             replyUrl = URLExt.join(settings.baseUrl, replyUrl);
           }
@@ -181,7 +214,13 @@ async function requestServerWithState(
         }
       } else if (response.status === 202) {
         await reconcilePendingOutputs(cell, response, reconciliationState);
-        let redirectUrl = response.headers.get('Location') || url;
+        // Header first, body second (see IOutputReconciliationState), and
+        // only then the polled URL itself — re-GETting the execute URL is
+        // right when THAT is the requests URL, and wrong on the first hop.
+        let redirectUrl =
+          response.headers.get('Location') ||
+          reconciliationState.requestUrl ||
+          url;
         if (!redirectUrl.startsWith(settings.baseUrl)) {
           redirectUrl = URLExt.join(settings.baseUrl, redirectUrl);
         }

@@ -243,7 +243,13 @@ class ExecutionStack:
             shell_ready = await shell_ready
         if not (stdin_ready or shell_ready):
             client.input(value)
-            self.__pending_inputs[kernel_id].clear()
+        # Cleared whichever branch was taken. The request is answered in one
+        # and overtaken in the other — the kernel asked again, or finished —
+        # so in neither is it still pending. Clearing only after sending left
+        # the stack advertising an input nobody would ever answer again: the
+        # caller had been told CREATED, and every later poll kept returning
+        # the same prompt.
+        self.__pending_inputs[kernel_id].clear()
 
     def is_remote(self, kernel_id: str) -> bool:
         """Whether ``kernel_id`` is connected through a remote Jupyter server."""
