@@ -261,17 +261,27 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
             const executionCountMissing =
               sharedCodeCell.execution_count !== executionCount;
 
-            console.debug('[jupyter-server-nbmodel] Execution completed', {
-              cellId,
-              documentId,
-              documentPath,
-              status: data['status'],
-              sharedModelUpdates,
-              serverOutputCount: serverOutputs.length,
-              sharedOutputCount: sharedOutputs.length,
-              outputsMissing,
-              executionCountMissing
-            });
+            /*
+             * One FLAT line, never an object.
+             *
+             * A console groups an object behind a disclosure triangle, and
+             * what is copied out of it is the collapsed form — the counts
+             * that say on which side the outputs were lost end up as an
+             * ellipsis in every report. A string cannot be collapsed.
+             */
+            console.debug(
+              `[jupyter-server-nbmodel] Execution completed: cell=${cellId} ` +
+                `http=${response.status} status=${String(data['status'])} ` +
+                `serverOutputs=${serverOutputs.length} ` +
+                `sharedOutputs=${sharedOutputs.length} ` +
+                `sharedModelUpdates=${sharedModelUpdates} ` +
+                `outputsMissing=${outputsMissing} ` +
+                `executionCountMissing=${executionCountMissing} ` +
+                `recoverOutputs=${recoverOutputs} ` +
+                `documentId=${String(documentId)} ` +
+                `documentPath=${String(documentPath)} ` +
+                `body=${JSON.stringify(data).slice(0, 300)}`
+            );
 
             // Server-side collaboration is the streaming path. If its update
             // was unavailable (no collaboration extension) or could not be

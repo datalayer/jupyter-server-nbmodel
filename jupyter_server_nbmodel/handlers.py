@@ -88,6 +88,10 @@ class ExecuteHandler(ExtensionHandlerMixin, APIHandler):
         location = f"/api/kernels/{kernel_id}/requests/{uid}"
         self.set_status(HTTPStatus.ACCEPTED)
         self.set_header("Location", location)
+        # Location is not CORS-safelisted: without this a page served from
+        # another origin cannot read where to poll. The body repeats it in
+        # `request_url` for clients that predate either side.
+        self.set_header("Access-Control-Expose-Headers", "Location")
         self.finish(
             json.dumps(
                 {
@@ -178,6 +182,7 @@ class RequestHandler(ExtensionHandlerMixin, APIHandler):
                 elif "input_request" in r:
                     self.set_status(300)
                     self.set_header("Location", f"/api/kernels/{kernel_id}/input")
+                    self.set_header("Access-Control-Expose-Headers", "Location")
                 elif r.get("pending") is True:
                     self.set_status(202)
                 else:
