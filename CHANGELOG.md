@@ -2,6 +2,25 @@
 
 <!-- <START NEW CHANGELOG ENTRY> -->
 
+## 0.2.8
+
+([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/v0.2.7...bfbb9c6371f8345edead02ea5b7827ea4b576182))
+
+### Enhancements made
+
+- Better cross origin behavior [#90](https://github.com/datalayer/jupyter-server-nbmodel/pull/90) ([@echarles](https://github.com/echarles))
+
+### Contributors to this release
+
+The following people contributed discussions, new ideas, code and documentation contributions, and review.
+See [our definition of contributors](https://github-activity.readthedocs.io/en/latest/use/#how-does-this-tool-define-contributions-in-the-reports).
+
+([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2026-08-18&to=2026-08-20&type=c))
+
+@echarles ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aecharles+updated%3A2026-08-18..2026-08-20&type=Issues))
+
+<!-- <END NEW CHANGELOG ENTRY> -->
+
 ## 0.2.7
 
 ([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/v0.2.6...d6b9b18d459499f3d3c176ccaa5a52136904024b))
@@ -18,8 +37,6 @@ See [our definition of contributors](https://github-activity.readthedocs.io/en/l
 ([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2026-08-17&to=2026-08-18&type=c))
 
 @echarles ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aecharles+updated%3A2026-08-17..2026-08-18&type=Issues))
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.2.6
 
