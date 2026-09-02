@@ -21,12 +21,12 @@ costs you an execution — and the outputs are still there when you come back.
 - **🤖 Agent ready** — a REST API to run cells and read outputs, so an agent works
   from the same Notebook you do.
 
-[![HOT NEWS](https://img.shields.io/badge/%F0%9F%94%A5%20HOT%20NEWS-Managed%20MCP%20is%20live-E74C3C?style=for-the-badge&labelColor=922B21)](https://datalayer.ai/docs/access-mcp)
+[![HOT NEWS](https://img.shields.io/badge/%F0%9F%94%A5%20HOT%20NEWS-Managed%20MCP%20is%20live-E74C3C?style=for-the-badge&labelColor=922B21)](https://datalayer.ai)
 
 **Your agent can now reach these Notebooks without running anything.** The Managed
 Jupyter MCP Server, operated by Datalayer, is at **`https://mcp.datalayer.run/mcp`** — durable execution included, so a cell keeps running after the agent disconnects.
 
-→ [**Managed Jupyter MCP Server**](https://datalayer.ai/docs/access-mcp)
+→ [**Managed Jupyter MCP Server**](https://datalayer.ai)
 
 [![Claude Code plugin](https://img.shields.io/badge/%F0%9F%A4%96%20Claude%20Code-plugin%20available-8E44AD?style=for-the-badge&labelColor=5B2C6F)](https://github.com/datalayer/jupyter-mcp-server/tree/main/ext/claude-plugin)
  
