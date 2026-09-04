@@ -28,12 +28,12 @@ Jupyter MCP Server, operated by Datalayer, is at **`https://mcp.datalayer.run/mc
 
 → [**Managed Jupyter MCP Server**](https://datalayer.ai)
 
-[![Claude Code plugin](https://img.shields.io/badge/%F0%9F%A4%96%20Claude%20Code-plugin%20available-8E44AD?style=for-the-badge&labelColor=5B2C6F)](https://github.com/datalayer/jupyter-mcp-server/tree/main/ext/claude-plugin)
+[![Claude Code plugin](https://img.shields.io/badge/%F0%9F%A4%96%20Claude%20Code-plugin%20available-8E44AD?style=for-the-badge&labelColor=5B2C6F)](https://github.com/datalayer/jupyter-mcp-server/tree/main/extensions/claude-plugin)
  
 Claude Code connects with one command through
-the [Datalayer plugin](https://github.com/datalayer/jupyter-mcp-server/tree/main/ext/claude-plugin).
+the [Datalayer plugin](https://github.com/datalayer/jupyter-mcp-server/tree/main/extensions/claude-plugin).
 
-→ [**Datalayer plugin for Claude Code**](https://github.com/datalayer/jupyter-mcp-server/tree/main/ext/claude-plugin)
+→ [**Datalayer plugin for Claude Code**](https://github.com/datalayer/jupyter-mcp-server/tree/main/extensions/claude-plugin)
 
 ---
 
