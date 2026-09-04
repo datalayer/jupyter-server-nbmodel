@@ -230,7 +230,7 @@ export class NotebookCellServerExecutor implements INotebookCellExecutor {
           }
           const releaseSubmission =
             await this._submissionQueue.acquire(kernelId);
-          let success = false;
+          let success: boolean;
           try {
             // FIXME quid of deletedCells and timing record.
             const response = await requestServer(
