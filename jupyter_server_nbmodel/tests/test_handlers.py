@@ -578,42 +578,111 @@ async def test_post_input_execute(jp_fetch, pending_kernel_is_ready):
     await asyncio.sleep(1)
 
 
-# FIXME
-# @pytest.mark.timeout(TEST_TIMEOUT)
-# async def test_cancel_execute(jp_fetch, pending_kernel_is_ready):
-#     # Start the first kernel
-#     r = await jp_fetch(
-#         "api", "kernels", method="POST", body=json.dumps({"name": NATIVE_KERNEL_NAME})
-#     )
-#     kernel = json.loads(r.body.decode())
-#     await pending_kernel_is_ready(kernel["id"])
+@pytest.mark.timeout(TEST_TIMEOUT)
+async def test_cancel_execute_interrupts_the_run(jp_fetch, pending_kernel_is_ready):
+    """DELETE on a pending request interrupts the kernel and ends the run.
 
-#     response = await jp_fetch(
-#         "api",
-#         "kernels",
-#         kernel["id"],
-#         "execute",
-#         method="POST",
-#         body=json.dumps({"code": """import time
-# time.sleep(10)
-# print("end")
-# """}),
-#     )
+    A cancelled wait must also stop the work: without the interrupt the cell
+    keeps running and its outputs keep landing in the document after the
+    caller has given up. The interrupted cell's reply is an error, which the
+    runtime records as this request's terminal result, so the next poll ends
+    with 500 rather than staying pending — and the kernel is left alive.
+    """
+    r = await jp_fetch(
+        "api", "kernels", method="POST", body=json.dumps({"name": NATIVE_KERNEL_NAME})
+    )
+    kernel = json.loads(r.body.decode())
+    await pending_kernel_is_ready(kernel["id"])
 
-#     assert response.code == 202
-#     location = response.headers["Location"]
+    response = await jp_fetch(
+        "api",
+        "kernels",
+        kernel["id"],
+        "execute",
+        method="POST",
+        body=json.dumps({"code": "import time\ntime.sleep(30)\nprint('end')\n"}),
+    )
+    assert response.code == 202
+    location = response.headers["Location"]
 
-#     # Cancel task
-#     response2 = await jp_fetch(location, method="DELETE")
+    # Wait until the cell is actually running, so the interrupt has something
+    # to stop rather than racing the worker that has not started it yet.
+    for _ in range(int(TEST_TIMEOUT / SLEEP)):
+        poll = await jp_fetch(location, raise_error=False)
+        if poll.code == 202 and json.loads(poll.body).get("request_status") == "running":
+            break
+        await asyncio.sleep(SLEEP)
+    else:
+        raise TimeoutError("Execution never started running.")
 
-#     assert response2.code == 204
+    cancel = await jp_fetch(location, method="DELETE")
+    assert cancel.code == 204
 
-#     response3 = await jp_fetch(location)
-#     payload = json.loads(response3.body)
-#     assert payload == {
-#         "status": "error",
-#         "execution_count": 1
-#     }
+    # The run ends with an error rather than staying pending or completing.
+    for _ in range(int(TEST_TIMEOUT / SLEEP)):
+        poll = await jp_fetch(location, raise_error=False)
+        if poll.code != 202:
+            break
+        await asyncio.sleep(SLEEP)
+    else:
+        raise TimeoutError("Interrupted request never reached a terminal state.")
 
-#     r2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
-#     assert r2.code == 204
+    # A cancelled run ends like any cell error: HTTP 200 carrying an error
+    # status (the interrupt is a KeyboardInterrupt raised *in the kernel*, not
+    # a server-side failure, so it is not a 500), with the interrupt recorded
+    # as the cell's output.
+    assert poll.code == 200
+    payload = json.loads(poll.body)
+    assert payload["status"] == "error"
+    assert payload["pending"] is False
+    assert payload["request_status"] == "complete"
+    outputs = json.loads(payload["outputs"])
+    assert any(
+        o.get("output_type") == "error" and o.get("ename") == "KeyboardInterrupt"
+        for o in outputs
+    ), outputs
+
+    # The kernel survived the interrupt and runs the next request.
+    after = await wait_for_request(
+        jp_fetch,
+        "api",
+        "kernels",
+        kernel["id"],
+        "execute",
+        method="POST",
+        body=json.dumps({"code": "1 + 1"}),
+    )
+    assert after.code == 200
+    assert json.loads(after.body)["status"] == "ok"
+
+    r2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
+    assert r2.code == 204
+    await asyncio.sleep(1)
+
+
+@pytest.mark.timeout(TEST_TIMEOUT)
+async def test_cancel_unknown_request_is_not_found(jp_fetch, pending_kernel_is_ready):
+    """A DELETE naming a request the kernel never had is a 404, not a silent
+    interrupt of whatever else the kernel is running."""
+    import uuid
+
+    r = await jp_fetch(
+        "api", "kernels", method="POST", body=json.dumps({"name": NATIVE_KERNEL_NAME})
+    )
+    kernel = json.loads(r.body.decode())
+    await pending_kernel_is_ready(kernel["id"])
+
+    response = await jp_fetch(
+        "api",
+        "kernels",
+        kernel["id"],
+        "requests",
+        str(uuid.uuid4()),
+        method="DELETE",
+        raise_error=False,
+    )
+    assert response.code == 404
+
+    r2 = await jp_fetch("api", "kernels", kernel["id"], method="DELETE")
+    assert r2.code == 204
+    await asyncio.sleep(1)

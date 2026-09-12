@@ -221,6 +221,55 @@ class ExecutionStack:
                         client.context.destroy(linger=0)
                 self.__remote_servers.pop(kernel_id, None)
 
+    async def interrupt(self, kernel_id: str, request_id: str | None = None) -> None:
+        """Interrupt the execution running in ``kernel_id``.
+
+        Stops the cell currently running — the run a caller was waiting on —
+        while leaving the kernel alive for the next request. The interrupted
+        cell's execute reply comes back as an error, which the worker records
+        as this request's terminal result, so a poll that was pending ends
+        with an error instead of hanging, and the outputs written up to the
+        interrupt stay in the document.
+
+        This is a narrower thing than ``cancel``: ``cancel`` tears the kernel's
+        worker and client down, ``interrupt`` signals the kernel and leaves it
+        able to run the next cell.
+
+        Args:
+            kernel_id: Kernel identifier
+            request_id: [optional] the request the caller was waiting on. When
+                given it must be one this stack knows for ``kernel_id``, so
+                cancelling an unknown request is refused rather than
+                interrupting whatever else the kernel happens to be running.
+
+        Raises:
+            ValueError: if ``request_id`` is given and unknown for ``kernel_id``.
+            NotImplementedError: for a kernel hosted by a remote Jupyter server
+                whose client cannot be interrupted from here.
+        """
+        if request_id is not None and request_id not in self.__execution_results.get(
+            kernel_id, {}
+        ):
+            raise ValueError(
+                f"Execution request {request_id} for kernel {kernel_id} does not exists."
+            )
+
+        if self.is_remote(kernel_id):
+            client = self.__kernel_clients.get(kernel_id)
+            interrupt = getattr(client, "interrupt_kernel", None)
+            if interrupt is None:
+                raise NotImplementedError(
+                    f"Cannot interrupt the remote kernel {kernel_id} from here."
+                )
+            get_logger().info("Interrupting remote kernel %s.", kernel_id)
+            await _run_in_thread(interrupt)
+            return
+
+        get_logger().info("Interrupting kernel %s.", kernel_id)
+        result = self.__manager.interrupt_kernel(kernel_id)
+        if inspect.isawaitable(result):
+            await result
+
     async def send_input(self, kernel_id: str, value: str) -> None:
         """Send input ``value`` to the kernel ``kernel_id``.
 

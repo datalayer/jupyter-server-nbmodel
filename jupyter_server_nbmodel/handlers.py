@@ -189,6 +189,36 @@ class RequestHandler(ExtensionHandlerMixin, APIHandler):
                     self.set_status(200)
                 self.finish(json.dumps(r))
 
+    @tornado.web.authenticated
+    async def delete(self, kernel_id: str, request_id: str) -> None:
+        """`DELETE /api/kernels/<kernel_id>/requests/<request_id>` cancels a run.
+
+        Interrupts the cell running in ``kernel_id`` — the run the caller was
+        waiting on under ``request_id`` — so a cancelled wait also stops the
+        work rather than leaving it running with its outputs still landing in
+        the document. The interrupted request's terminal result is recorded by
+        the runtime, so a later GET of the same request ends with an error
+        instead of staying pending.
+
+        Args:
+            kernel_id: Kernel identifier
+            request_id: Request identifier
+
+        Raises:
+            404 if request ``request_id`` for ``kernel_id`` does not exist
+            501 if ``kernel_id`` is a remote kernel that cannot be interrupted
+        """
+        try:
+            await self._stack.interrupt(kernel_id, request_id)
+        except ValueError as err:
+            raise tornado.web.HTTPError(HTTPStatus.NOT_FOUND, reason=str(err)) from err
+        except NotImplementedError as err:
+            raise tornado.web.HTTPError(
+                HTTPStatus.NOT_IMPLEMENTED, reason=str(err)
+            ) from err
+        self.set_status(HTTPStatus.NO_CONTENT)
+        self.finish()
+
 # ---------------------------------------------------------------------------
 # The "Recover the outputs over HTTP" switch.
 #
