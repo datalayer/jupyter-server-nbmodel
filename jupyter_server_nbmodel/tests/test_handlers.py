@@ -413,7 +413,7 @@ async def test_post_erroneous_execute(jp_fetch, pending_kernel_is_ready, snippet
 @pytest.mark.asyncio
 async def test_kernel_worker_reports_error(monkeypatch):
     # Patch _execute_snippet to raise an error
-    async def fake_execute(client, ydoc, snippet, metadata, stdin_hook, progress=None):
+    async def fake_execute(client, ydoc, snippet, metadata, stdin_hook, progress=None, **kwargs):
         raise RuntimeError("simulated failure")
 
     monkeypatch.setattr(

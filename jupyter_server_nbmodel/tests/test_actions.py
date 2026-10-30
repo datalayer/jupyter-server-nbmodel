@@ -1,11 +1,15 @@
 """Unit tests for execution actions."""
 
 import asyncio
+import time
 
+import pytest
 from pycrdt import Array, Doc, Text
 
 from jupyter_server_nbmodel.actions import (
+    ExecuteReplyTimeoutError,
     _apply_terminal_controls,
+    _execute_interactive,
     _output_hook,
     _StreamState,
     dedup_task_queue,
@@ -195,3 +199,64 @@ async def test_dedup_task_queue_keeps_latest_cell_request():
         queue.task_done()
     assert remaining == items[1:]
     await asyncio.wait_for(queue.join(), timeout=1)
+
+
+class _FakeClient:
+    """A client running one cell: busy for ``busy`` seconds, then idle.
+
+    Its execute reply follows idle unless ``reply`` is false, in which case it
+    is lost and ``execute_interactive`` waits for it forever, like
+    jupyter_client does.
+    """
+
+    def __init__(self, busy: float = 0, reply: bool = True):
+        self.busy = busy
+        self.reply = reply
+
+    async def execute_interactive(self, code, output_hook, stdin_hook):
+        await asyncio.sleep(self.busy)
+        output_hook({"header": {"msg_type": "status"}, "content": {"execution_state": "idle"}})
+        if not self.reply:
+            await asyncio.Event().wait()
+        return {"content": {"status": "ok", "execution_count": 1}}
+
+
+async def test_execute_reply_timeout_starts_when_the_kernel_goes_idle():
+    """A cell busy for longer than the timeout still gets its reply."""
+    seen: list[dict] = []
+
+    reply = await _execute_interactive(
+        _FakeClient(busy=0.5), "slow()", seen.append, None, execute_reply_timeout=0.2
+    )
+
+    assert reply["content"]["status"] == "ok"
+    # The idle status still reaches the caller's hook.
+    assert seen == [{"header": {"msg_type": "status"}, "content": {"execution_state": "idle"}}]
+
+
+async def test_execute_reply_timeout_gives_up_on_a_lost_reply():
+    """A reply missing after idle ends the wait instead of hanging it."""
+    start = time.monotonic()
+
+    with pytest.raises(ExecuteReplyTimeoutError, match="execute_reply"):
+        await _execute_interactive(
+            _FakeClient(reply=False), "1", lambda msg: None, None, execute_reply_timeout=0.2
+        )
+
+    assert time.monotonic() - start < 2
+
+
+async def test_execute_reply_timeout_zero_waits_forever():
+    """A timeout of 0 keeps the unbounded wait."""
+    execution = asyncio.ensure_future(
+        _execute_interactive(
+            _FakeClient(reply=False), "1", lambda msg: None, None, execute_reply_timeout=0
+        )
+    )
+
+    await asyncio.sleep(0.5)
+
+    assert not execution.done()
+    execution.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await execution

@@ -17,7 +17,7 @@ import jupyter_server.services
 import jupyter_server.services.kernels
 import jupyter_server.services.kernels.kernelmanager
 
-from jupyter_server_nbmodel.actions import kernel_worker
+from jupyter_server_nbmodel.actions import ExecuteReplyTimeoutError, kernel_worker
 from jupyter_server_nbmodel.log import get_logger
 from jupyter_server_nbmodel.models import PendingInput
 
@@ -65,9 +65,12 @@ class ExecutionStack:
         self,
         manager: jupyter_server.services.kernels.kernelmanager.AsyncMappingKernelManager,
         ydoc_extension: jupyter_server_ydoc.app.YDocExtension | None,
+        execute_reply_timeout: float | None = None,
     ):
         self.__manager = manager
         self.__ydoc = ydoc_extension
+        # Seconds to wait for an execute reply once the kernel is idle.
+        self.__execute_reply_timeout = execute_reply_timeout
         # Store execution results per kernelID per execution request ID
         self.__execution_results: dict[str, dict[str, t.Any]] = {}
         # Keep request metadata until its result is consumed so every response
@@ -153,26 +156,51 @@ class ExecutionStack:
 
         return self.__kernel_clients[kernel_id]
 
+    def _drop_client(self, kernel_id: str) -> None:
+        """Close and forget the cached client of ``kernel_id``, if any."""
+        client = self.__kernel_clients.pop(kernel_id, None)
+        if client is not None:
+            client.stop_channels()
+            # Destroy the ZMQ context to release internal signaling FDs
+            # (eventfd/pipe pair). stop_channels() only closes the sockets.
+            # Without this, each dropped client leaks 2 FDs until GC
+            # collects it.
+            if getattr(client, "_created_context", False) and client.context:
+                client.context.destroy(linger=0)
+
     async def _run_worker(self, kernel_id: str) -> None:
-        """Create the kernel client and process its execution queue."""
-        try:
-            client = await self._get_client(kernel_id)
-        except BaseException as error:
-            get_logger().error("Failed to connect to kernel %s.", kernel_id, exc_info=error)
-            queue = self.__tasks[kernel_id]
-            while not queue.empty():
-                uid, _, _ = queue.get_nowait()
-                self.__execution_results[kernel_id][uid] = {"error": str(error)}
-                queue.task_done()
-            return
-        await kernel_worker(
-            kernel_id,
-            client,
-            self.__ydoc,
-            self.__tasks[kernel_id],
-            self.__execution_results[kernel_id],
-            self.__pending_inputs[kernel_id],
-        )
+        """Create the kernel client and process its execution queue.
+
+        A client whose execute reply was lost is replaced by a new one, which
+        carries on with the queue.
+        """
+        while True:
+            try:
+                client = await self._get_client(kernel_id)
+            except BaseException as error:
+                get_logger().error("Failed to connect to kernel %s.", kernel_id, exc_info=error)
+                queue = self.__tasks[kernel_id]
+                while not queue.empty():
+                    uid, _, _ = queue.get_nowait()
+                    self.__execution_results[kernel_id][uid] = {"error": str(error)}
+                    queue.task_done()
+                return
+            try:
+                await kernel_worker(
+                    kernel_id,
+                    client,
+                    self.__ydoc,
+                    self.__tasks[kernel_id],
+                    self.__execution_results[kernel_id],
+                    self.__pending_inputs[kernel_id],
+                    execute_reply_timeout=self.__execute_reply_timeout,
+                )
+                return
+            except ExecuteReplyTimeoutError:
+                get_logger().warning(
+                    "Reconnecting to kernel %s after a lost execute reply.", kernel_id
+                )
+                self._drop_client(kernel_id)
 
     async def dispose(self) -> None:
         get_logger().debug("Disposing ExecutionStack…")
@@ -191,13 +219,8 @@ class ExecutionStack:
         )
         self.__tasks.clear()
 
-        for client in self.__kernel_clients.values():
-            client.stop_channels()
-            # Destroy the ZMQ context to release internal signaling FDs
-            # (eventfd/pipe pair). stop_channels() only closes the sockets.
-            if getattr(client, "_created_context", False) and client.context:
-                client.context.destroy(linger=0)
-        self.__kernel_clients.clear()
+        for kernel_id in list(self.__kernel_clients):
+            self._drop_client(kernel_id)
         self.__remote_servers.clear()
         self.__execution_metadata.clear()
         get_logger().debug("ExecutionStack has been disposed.")
@@ -225,15 +248,7 @@ class ExecutionStack:
                 if queue is not None:
                     await asyncio.wait_for(queue.join(), timeout=timeout)
             finally:
-                client = self.__kernel_clients.pop(kernel_id, None)
-                if client is not None:
-                    client.stop_channels()
-                    # Destroy the ZMQ context to release internal signaling
-                    # FDs. Without this, each cancel leaks 2 FDs (the
-                    # eventfd/pipe pair used by the context's internal
-                    # signaling mechanism) until GC collects the client.
-                    if getattr(client, "_created_context", False) and client.context:
-                        client.context.destroy(linger=0)
+                self._drop_client(kernel_id)
                 self.__remote_servers.pop(kernel_id, None)
 
     async def interrupt(self, kernel_id: str, request_id: str | None = None) -> None:
@@ -451,6 +466,9 @@ class ExecutionStack:
 
         self.__tasks[kernel_id].put_nowait((uid, snippet, metadata))
 
-        if kernel_id not in self.__workers:
+        # A worker that has stopped — it could not connect, or the kernel
+        # failed under it — would otherwise leave this request queued forever.
+        worker = self.__workers.get(kernel_id)
+        if worker is None or worker.done():
             self.__workers[kernel_id] = asyncio.create_task(self._run_worker(kernel_id))
         return uid
