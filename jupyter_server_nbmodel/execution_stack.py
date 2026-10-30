@@ -31,6 +31,9 @@ if t.TYPE_CHECKING:
 
 NO_RESULT = object()
 
+# Seconds to wait for a kernel's worker to stop when an execution is abandoned.
+ABANDON_TIMEOUT = 3
+
 
 async def _run_in_thread(callback: t.Callable[[], t.Any]) -> t.Any:
     """Run a blocking callback on a dedicated daemon thread."""
@@ -66,11 +69,14 @@ class ExecutionStack:
         manager: jupyter_server.services.kernels.kernelmanager.AsyncMappingKernelManager,
         ydoc_extension: jupyter_server_ydoc.app.YDocExtension | None,
         execute_reply_timeout: float | None = None,
+        cancel_grace_period: float = 5,
     ):
         self.__manager = manager
         self.__ydoc = ydoc_extension
         # Seconds to wait for an execute reply once the kernel is idle.
         self.__execute_reply_timeout = execute_reply_timeout
+        # Seconds a cancelled execution has to end after its interrupt.
+        self.__cancel_grace_period = cancel_grace_period
         # Store execution results per kernelID per execution request ID
         self.__execution_results: dict[str, dict[str, t.Any]] = {}
         # Keep request metadata until its result is consumed so every response
@@ -241,7 +247,12 @@ class ExecutionStack:
             worker = self.__workers.pop(kernel_id, None)
             if worker is not None:
                 worker.cancel()
-                await asyncio.wait_for(worker, timeout=timeout)
+                # Not ``wait_for``: it would re-raise the worker's own
+                # CancelledError to the caller.
+                await asyncio.wait({worker}, timeout=timeout)
+                if not worker.done():
+                    msg = f"The execution worker of kernel {kernel_id} did not stop in time."
+                    raise TimeoutError(msg)
         finally:
             try:
                 queue = self.__tasks.pop(kernel_id, None)
@@ -299,6 +310,92 @@ class ExecutionStack:
         result = self.__manager.interrupt_kernel(kernel_id)
         if inspect.isawaitable(result):
             await result
+
+    async def cancel_request(self, kernel_id: str, request_id: str) -> None:
+        """Cancel the execution request ``request_id`` of ``kernel_id``.
+
+        Whatever the request was doing, it has a terminal result once this
+        returns, so a caller polling it is never left waiting:
+
+        * A queued request is taken out of the queue and failed. The request
+          running ahead of it is left alone.
+        * A running request is interrupted. If it has not ended
+          ``cancel_grace_period`` seconds later — a kernel whose reply was lost
+          is idle, and an idle kernel does not answer an interrupt — it is
+          abandoned: the kernel's worker and client are torn down, failing the
+          requests queued behind it as any failed request does, and the next
+          request starts over with a new client.
+
+        Args:
+            kernel_id: Kernel identifier
+            request_id: Request identifier
+
+        Raises:
+            ValueError: if ``request_id`` is unknown for ``kernel_id``.
+            NotImplementedError: for a kernel hosted by a remote Jupyter server
+                whose client cannot be interrupted from here.
+        """
+        results = self.__execution_results.get(kernel_id, {})
+        if request_id not in results:
+            raise ValueError(
+                f"Execution request {request_id} for kernel {kernel_id} does not exists."
+            )
+
+        if results[request_id] is NO_RESULT and self._dequeue(kernel_id, request_id):
+            get_logger().info("Cancelled queued execution request %s.", request_id)
+            results[request_id] = {"error": "Execution cancelled before it started."}
+            return
+
+        await self.interrupt(kernel_id, request_id)
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.__cancel_grace_period
+        while self._is_pending(kernel_id, request_id) and loop.time() < deadline:
+            await asyncio.sleep(0.05)
+        if not self._is_pending(kernel_id, request_id):
+            return
+
+        get_logger().warning(
+            "Execution request %s did not end %gs after its interrupt; abandoning it.",
+            request_id,
+            self.__cancel_grace_period,
+        )
+        await self.cancel(kernel_id, timeout=ABANDON_TIMEOUT)
+        # Unless the caller already collected the worker's own record of it.
+        if request_id in results:
+            results[request_id] = {
+                "error": (
+                    "Execution cancelled; the kernel did not end it within "
+                    f"{self.__cancel_grace_period:g}s of the interrupt."
+                )
+            }
+
+    def _dequeue(self, kernel_id: str, request_id: str) -> bool:
+        """Take ``request_id`` out of the queue of ``kernel_id``.
+
+        Synchronous on purpose: with no ``await`` between draining the queue
+        and refilling it, the worker cannot take a request in between.
+
+        Returns:
+            Whether the request was queued.
+        """
+        queue = self.__tasks.get(kernel_id)
+        if queue is None:
+            return False
+        items = []
+        while not queue.empty():
+            items.append(queue.get_nowait())
+            # Balance the original put; the kept items are put back below.
+            queue.task_done()
+        for item in items:
+            if item[0] != request_id:
+                queue.put_nowait(item)
+        return queue.qsize() < len(items)
+
+    def _is_pending(self, kernel_id: str, request_id: str) -> bool:
+        """Whether ``request_id`` is still queued or running."""
+        result = self.__execution_results.get(kernel_id, {}).get(request_id)
+        return result is NO_RESULT or (isinstance(result, dict) and result.get("pending") is True)
 
     async def send_input(self, kernel_id: str, value: str) -> None:
         """Send input ``value`` to the kernel ``kernel_id``.

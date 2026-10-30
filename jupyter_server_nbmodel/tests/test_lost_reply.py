@@ -2,10 +2,11 @@
 #
 # Distributed under the terms of the Modified BSD License.
 
-"""A lost ``execute_reply`` must not wedge the kernel's request queue."""
+"""Neither a lost ``execute_reply`` nor a cancel may wedge a kernel's request queue."""
 
 import asyncio
 import json
+import time
 
 import pytest
 from jupyter_client.kernelspec import NATIVE_KERNEL_NAME
@@ -197,6 +198,83 @@ async def test_a_stopped_worker_is_restarted(
     response = await _wait_terminal(jp_fetch, await _post_execute(jp_fetch, kernel_id, "2"))
     assert response.code == 200
     assert json.loads(response.body)["status"] == "ok"
+
+    r = await jp_fetch("api", "kernels", kernel_id, method="DELETE")
+    assert r.code == 204
+    await asyncio.sleep(1)
+
+
+@pytest.mark.timeout(TEST_TIMEOUT)
+async def test_cancel_queued_request_leaves_the_running_one_alone(
+    jp_fetch,
+    pending_kernel_is_ready,  # noqa: F811
+):
+    """Cancelling a queued request takes it out of the queue, interrupting nothing."""
+    kernel_id = await _start_kernel(jp_fetch, pending_kernel_is_ready)
+    running = await _post_execute(jp_fetch, kernel_id, "import time\ntime.sleep(2)\nprint('a')")
+    queued = await _post_execute(jp_fetch, kernel_id, "1 + 1")
+    await _wait_running(jp_fetch, running)
+
+    cancel = await jp_fetch(queued, method="DELETE")
+    assert cancel.code == 204
+
+    response = await jp_fetch(queued, raise_error=False)
+    assert response.code == 500
+    assert "cancelled before it started" in json.loads(response.body)["error"]
+
+    response = await _wait_terminal(jp_fetch, running)
+    assert response.code == 200
+    payload = json.loads(response.body)
+    assert payload["status"] == "ok"
+    assert json.loads(payload["outputs"]) == [
+        {"output_type": "stream", "name": "stdout", "text": "a\n"}
+    ]
+
+    r = await jp_fetch("api", "kernels", kernel_id, method="DELETE")
+    assert r.code == 204
+    await asyncio.sleep(1)
+
+
+@pytest.mark.timeout(TEST_TIMEOUT * 2)
+@pytest.mark.parametrize(
+    "jp_server_config",
+    [{"execute_reply_timeout": 0, "cancel_grace_period": 1}],
+    indirect=True,
+)
+async def test_cancel_abandons_a_request_the_kernel_never_ends(
+    jp_fetch,
+    jp_serverapp,
+    pending_kernel_is_ready,  # noqa: F811
+    shared_session_id,
+):
+    """A cancelled request the interrupt cannot end is abandoned after the grace period."""
+    kernel_id = await _start_kernel(jp_fetch, pending_kernel_is_ready)
+    first = await _execute(jp_fetch, kernel_id, "1")
+    assert json.loads(first.body)["status"] == "ok"
+
+    # With its route taken over, the stack's next request never reaches the
+    # kernel: the kernel stays idle and has nothing to interrupt.
+    other = await _connect_other_client(jp_serverapp, kernel_id)
+    try:
+        lost = await _post_execute(jp_fetch, kernel_id, "1 + 1")
+        await _wait_running(jp_fetch, lost)
+
+        start = time.monotonic()
+        cancel = await jp_fetch(lost, method="DELETE")
+        assert cancel.code == 204
+        assert time.monotonic() - start < 1 + 3
+
+        response = await jp_fetch(lost, raise_error=False)
+        assert response.code == 500
+        assert "did not end it" in json.loads(response.body)["error"]
+
+        # The kernel is still usable, through a new client.
+        response = await _execute(jp_fetch, kernel_id, "3")
+        payload = json.loads(response.body)
+        assert payload["status"] == "ok"
+        assert json.loads(payload["outputs"])[0]["data"]["text/plain"] == "3"
+    finally:
+        other.stop_channels()
 
     r = await jp_fetch("api", "kernels", kernel_id, method="DELETE")
     assert r.code == 204

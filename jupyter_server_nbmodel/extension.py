@@ -41,6 +41,16 @@ class Extension(ExtensionApp):
         ),
     )
 
+    cancel_grace_period = Float(
+        5,
+        config=True,
+        help=(
+            "Seconds a cancelled running cell has to end after its kernel is interrupted. "
+            "A cell still running then is abandoned: it fails along with the cells queued "
+            "behind it, and the next cell starts over with a new kernel client."
+        ),
+    )
+
     def initialize_handlers(self):
         rtc_extension = None
         rtc_extensions = self.serverapp.extension_manager.extension_apps.get(
@@ -55,6 +65,7 @@ class Extension(ExtensionApp):
             manager=self.settings["kernel_manager"],
             ydoc_extension=rtc_extension,
             execute_reply_timeout=self.execute_reply_timeout,
+            cancel_grace_period=self.cancel_grace_period,
         )
         self.handlers.extend(
             [
