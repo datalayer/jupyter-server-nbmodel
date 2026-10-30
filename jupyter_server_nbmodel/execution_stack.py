@@ -97,10 +97,25 @@ class ExecutionStack:
             self.dispose()
 
     def _get_local_client(self, kernel_id: str) -> t.Any:
-        """Get or create a client managed by the local Jupyter server."""
+        """Get or create a client managed by the local Jupyter server.
+
+        ``KernelManager.client()`` hands the client a clone of the manager's
+        session, session id included, and jupyter_client uses the session id
+        as the ZMQ identity of the shell and stdin sockets. ipykernel sets
+        ``ROUTER_HANDOVER`` on them, so any other ``km.client()`` connecting to
+        the kernel takes that identity over: its replies stop reaching this
+        client, the pending ``execute_reply`` with them, and the request it was
+        waiting on never ends. A session id of its own keeps the identity
+        distinct; the signing key is shared, so the kernel still accepts the
+        messages.
+        """
         if kernel_id not in self.__kernel_clients:
             km = self.__manager.get_kernel(kernel_id)
-            self.__kernel_clients[kernel_id] = km.client()
+            client = km.client()
+            session = getattr(client, "session", None)
+            if session is not None and hasattr(session, "session"):
+                session.session = str(uuid.uuid4())
+            self.__kernel_clients[kernel_id] = client
         return self.__kernel_clients[kernel_id]
 
     async def _get_client(self, kernel_id: str) -> t.Any:
