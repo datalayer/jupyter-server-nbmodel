@@ -102,7 +102,8 @@ jobs:
   integration-tests:
     name: Integration tests
     needs: build
-    runs-on: ubuntu-latest
+    # Playwright cannot install Chromium on ubuntu-26.04, which ubuntu-latest now is.
+    runs-on: ubuntu-24.04
 
     env:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/pw-browsers
