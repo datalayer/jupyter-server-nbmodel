@@ -18,7 +18,7 @@
 
 - Depend on the released Datalayer packages [#95](https://github.com/datalayer/jupyter-server-nbmodel/pull/95) ([@echarles](https://github.com/echarles))
 - Change comparison operator for PR update check [#93](https://github.com/datalayer/jupyter-server-nbmodel/pull/93) ([@JarLob](https://github.com/JarLob))
-- Release on a `v*` tag, with no token, and rename the workflows to `.yaml`
+- Release on a `v*` tag with no token, drop Jupyter Releaser, rename the workflows to `.yaml` [#97](https://github.com/datalayer/jupyter-server-nbmodel/pull/97) ([@echarles](https://github.com/echarles))
 
 ### Documentation improvements
 
