@@ -376,6 +376,64 @@ async def _run_in_thread(callback: t.Callable[[], t.Any]) -> t.Any:
     return result[0]
 
 
+class ExecuteReplyTimeoutError(TimeoutError):
+    """The kernel went idle, but the ``execute_reply`` never reached the client."""
+
+
+async def _execute_interactive(
+    client: t.Any,
+    snippet: str,
+    output_hook: t.Callable[[dict], None],
+    stdin_hook: t.Callable[[dict], None] | None,
+    execute_reply_timeout: float | None,
+) -> dict[str, t.Any]:
+    """Run ``client.execute_interactive``, bounding the wait for its reply.
+
+    ``execute_interactive`` drains IOPub until the kernel reports ``idle``,
+    then waits for the ``execute_reply`` on the shell channel with no limit:
+    its own ``timeout`` is a deadline for the whole run, which would stop long
+    cells too. The kernel sends the reply before it goes idle, so from idle on
+    the reply is due — the clock starts there, and a reply that has not come
+    within ``execute_reply_timeout`` seconds is given up on as lost.
+
+    Raises:
+        ExecuteReplyTimeoutError: if the reply did not arrive in time.
+    """
+    if not execute_reply_timeout:
+        return await ensure_async(
+            client.execute_interactive(snippet, output_hook=output_hook, stdin_hook=stdin_hook)
+        )
+
+    idle = asyncio.Event()
+
+    def hook(msg: dict) -> None:
+        output_hook(msg)
+        if (
+            msg["header"]["msg_type"] == "status"
+            and msg["content"].get("execution_state") == "idle"
+        ):
+            idle.set()
+
+    execution = asyncio.ensure_future(
+        ensure_async(client.execute_interactive(snippet, output_hook=hook, stdin_hook=stdin_hook))
+    )
+    went_idle = asyncio.ensure_future(idle.wait())
+    try:
+        await asyncio.wait({execution, went_idle}, return_when=asyncio.FIRST_COMPLETED)
+        if not execution.done():
+            await asyncio.wait({execution}, timeout=execute_reply_timeout)
+            if not execution.done():
+                msg = (
+                    f"No execute_reply received {execute_reply_timeout:g}s after the kernel "
+                    "went idle; the reply was lost."
+                )
+                raise ExecuteReplyTimeoutError(msg)
+        return execution.result()
+    finally:
+        for task in (execution, went_idle):
+            task.cancel()
+
+
 async def _execute_snippet(
     client: t.Any,
     ydoc: jupyter_server_ydoc.app.YDocExtension | None,
@@ -383,6 +441,7 @@ async def _execute_snippet(
     metadata: dict | None,
     stdin_hook: t.Callable[[dict], None] | None,
     progress: dict[str, t.Any] | None = None,
+    execute_reply_timeout: float | None = None,
 ) -> dict[str, t.Any]:
     """Snippet executor
 
@@ -393,8 +452,12 @@ async def _execute_snippet(
         metadata: The code snippet metadata; e.g. to define the snippet context
         stdin_hook: The stdin message callback
         progress: Mutable execution progress exposed by the request status endpoint
+        execute_reply_timeout: Seconds to wait for the execute reply once the
+            kernel is idle; ``None`` or ``0`` waits forever. Local clients only.
     Returns:
         The execution status and outputs.
+    Raises:
+        ExecuteReplyTimeoutError: if the execute reply was lost.
     """
     ycell = None
     time_info = {}
@@ -443,13 +506,22 @@ async def _execute_snippet(
     #   - should we?
     output_hook = partial(_output_hook, outputs, ycell, _StreamState())
     if not getattr(client, "_server_nbmodel_remote", False):
-        reply = await ensure_async(
-            client.execute_interactive(
+        try:
+            reply = await _execute_interactive(
+                client,
                 snippet,
-                output_hook=output_hook,
-                stdin_hook=stdin_hook if client.allow_stdin else None,
+                output_hook,
+                stdin_hook if client.allow_stdin else None,
+                execute_reply_timeout,
             )
-        )
+        except ExecuteReplyTimeoutError:
+            # The kernel is done with the cell: do not leave it shown as running.
+            if ycell is not None:
+                with ycell.doc.transaction():
+                    ycell["execution_state"] = "idle"
+                    if "jupyter_server_nbmodel" in ycell["metadata"]:
+                        del ycell["metadata"]["jupyter_server_nbmodel"]
+            raise
     else:
         # Remote WebSocket clients are synchronous. Run their blocking receive
         # loop in a worker thread while applying YDoc updates on the main loop.
@@ -572,10 +644,17 @@ async def kernel_worker(
     queue: asyncio.Queue,
     results: dict,
     pending_input: PendingInput,
+    execute_reply_timeout: float | None = None,
 ) -> None:
-    """Process execution request in order for a kernel."""
+    """Process execution request in order for a kernel.
+
+    Raises:
+        ExecuteReplyTimeoutError: when a request's execute reply was lost. The
+            request is failed, but the queue is left for a worker with a new
+            client: this one may have lost its route to the kernel.
+    """
     get_logger().debug(f"Starting worker to process execution requests of kernel {kernel_id}…")
-    to_raise = None
+    to_raise: BaseException | None = None
     while True:
         uid = None
         try:
@@ -604,6 +683,7 @@ async def kernel_worker(
                 execution_metadata,
                 partial(_stdin_hook, kernel_id, uid, pending_input),
                 progress,
+                execute_reply_timeout=execute_reply_timeout,
             )
             get_logger().debug(f"Execution request {uid} processed for kernel {kernel_id}.")
 
@@ -615,6 +695,16 @@ async def kernel_worker(
                         "error": "Execution cancelled because a previous queued request failed."
                     }
                     queue.task_done()
+        except ExecuteReplyTimeoutError as e:
+            # Only this request is failed. The ones queued behind it did
+            # nothing wrong; they run once the stack has reconnected.
+            if uid is not None:
+                results[uid] = {"error": str(e)}
+            get_logger().warning(
+                "Execution request %s for kernel %s failed: %s", uid, kernel_id, e
+            )
+            to_raise = e
+            break
         except (asyncio.CancelledError, KeyboardInterrupt, RuntimeError) as e:
             if uid is not None:
                 results[uid] = {"error": str(e)}

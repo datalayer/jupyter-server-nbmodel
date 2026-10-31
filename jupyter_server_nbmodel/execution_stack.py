@@ -17,7 +17,7 @@ import jupyter_server.services
 import jupyter_server.services.kernels
 import jupyter_server.services.kernels.kernelmanager
 
-from jupyter_server_nbmodel.actions import kernel_worker
+from jupyter_server_nbmodel.actions import ExecuteReplyTimeoutError, kernel_worker
 from jupyter_server_nbmodel.log import get_logger
 from jupyter_server_nbmodel.models import PendingInput
 
@@ -30,6 +30,9 @@ if t.TYPE_CHECKING:
 
 
 NO_RESULT = object()
+
+# Seconds to wait for a kernel's worker to stop when an execution is abandoned.
+ABANDON_TIMEOUT = 3
 
 
 async def _run_in_thread(callback: t.Callable[[], t.Any]) -> t.Any:
@@ -65,9 +68,15 @@ class ExecutionStack:
         self,
         manager: jupyter_server.services.kernels.kernelmanager.AsyncMappingKernelManager,
         ydoc_extension: jupyter_server_ydoc.app.YDocExtension | None,
+        execute_reply_timeout: float | None = None,
+        cancel_grace_period: float = 5,
     ):
         self.__manager = manager
         self.__ydoc = ydoc_extension
+        # Seconds to wait for an execute reply once the kernel is idle.
+        self.__execute_reply_timeout = execute_reply_timeout
+        # Seconds a cancelled execution has to end after its interrupt.
+        self.__cancel_grace_period = cancel_grace_period
         # Store execution results per kernelID per execution request ID
         self.__execution_results: dict[str, dict[str, t.Any]] = {}
         # Keep request metadata until its result is consumed so every response
@@ -97,10 +106,25 @@ class ExecutionStack:
             self.dispose()
 
     def _get_local_client(self, kernel_id: str) -> t.Any:
-        """Get or create a client managed by the local Jupyter server."""
+        """Get or create a client managed by the local Jupyter server.
+
+        ``KernelManager.client()`` hands the client a clone of the manager's
+        session, session id included, and jupyter_client uses the session id
+        as the ZMQ identity of the shell and stdin sockets. ipykernel sets
+        ``ROUTER_HANDOVER`` on them, so any other ``km.client()`` connecting to
+        the kernel takes that identity over: its replies stop reaching this
+        client, the pending ``execute_reply`` with them, and the request it was
+        waiting on never ends. A session id of its own keeps the identity
+        distinct; the signing key is shared, so the kernel still accepts the
+        messages.
+        """
         if kernel_id not in self.__kernel_clients:
             km = self.__manager.get_kernel(kernel_id)
-            self.__kernel_clients[kernel_id] = km.client()
+            client = km.client()
+            session = getattr(client, "session", None)
+            if session is not None and hasattr(session, "session"):
+                session.session = str(uuid.uuid4())
+            self.__kernel_clients[kernel_id] = client
         return self.__kernel_clients[kernel_id]
 
     async def _get_client(self, kernel_id: str) -> t.Any:
@@ -138,26 +162,51 @@ class ExecutionStack:
 
         return self.__kernel_clients[kernel_id]
 
+    def _drop_client(self, kernel_id: str) -> None:
+        """Close and forget the cached client of ``kernel_id``, if any."""
+        client = self.__kernel_clients.pop(kernel_id, None)
+        if client is not None:
+            client.stop_channels()
+            # Destroy the ZMQ context to release internal signaling FDs
+            # (eventfd/pipe pair). stop_channels() only closes the sockets.
+            # Without this, each dropped client leaks 2 FDs until GC
+            # collects it.
+            if getattr(client, "_created_context", False) and client.context:
+                client.context.destroy(linger=0)
+
     async def _run_worker(self, kernel_id: str) -> None:
-        """Create the kernel client and process its execution queue."""
-        try:
-            client = await self._get_client(kernel_id)
-        except BaseException as error:
-            get_logger().error("Failed to connect to kernel %s.", kernel_id, exc_info=error)
-            queue = self.__tasks[kernel_id]
-            while not queue.empty():
-                uid, _, _ = queue.get_nowait()
-                self.__execution_results[kernel_id][uid] = {"error": str(error)}
-                queue.task_done()
-            return
-        await kernel_worker(
-            kernel_id,
-            client,
-            self.__ydoc,
-            self.__tasks[kernel_id],
-            self.__execution_results[kernel_id],
-            self.__pending_inputs[kernel_id],
-        )
+        """Create the kernel client and process its execution queue.
+
+        A client whose execute reply was lost is replaced by a new one, which
+        carries on with the queue.
+        """
+        while True:
+            try:
+                client = await self._get_client(kernel_id)
+            except BaseException as error:
+                get_logger().error("Failed to connect to kernel %s.", kernel_id, exc_info=error)
+                queue = self.__tasks[kernel_id]
+                while not queue.empty():
+                    uid, _, _ = queue.get_nowait()
+                    self.__execution_results[kernel_id][uid] = {"error": str(error)}
+                    queue.task_done()
+                return
+            try:
+                await kernel_worker(
+                    kernel_id,
+                    client,
+                    self.__ydoc,
+                    self.__tasks[kernel_id],
+                    self.__execution_results[kernel_id],
+                    self.__pending_inputs[kernel_id],
+                    execute_reply_timeout=self.__execute_reply_timeout,
+                )
+                return
+            except ExecuteReplyTimeoutError:
+                get_logger().warning(
+                    "Reconnecting to kernel %s after a lost execute reply.", kernel_id
+                )
+                self._drop_client(kernel_id)
 
     async def dispose(self) -> None:
         get_logger().debug("Disposing ExecutionStack…")
@@ -176,13 +225,8 @@ class ExecutionStack:
         )
         self.__tasks.clear()
 
-        for client in self.__kernel_clients.values():
-            client.stop_channels()
-            # Destroy the ZMQ context to release internal signaling FDs
-            # (eventfd/pipe pair). stop_channels() only closes the sockets.
-            if getattr(client, "_created_context", False) and client.context:
-                client.context.destroy(linger=0)
-        self.__kernel_clients.clear()
+        for kernel_id in list(self.__kernel_clients):
+            self._drop_client(kernel_id)
         self.__remote_servers.clear()
         self.__execution_metadata.clear()
         get_logger().debug("ExecutionStack has been disposed.")
@@ -203,22 +247,19 @@ class ExecutionStack:
             worker = self.__workers.pop(kernel_id, None)
             if worker is not None:
                 worker.cancel()
-                await asyncio.wait_for(worker, timeout=timeout)
+                # Not ``wait_for``: it would re-raise the worker's own
+                # CancelledError to the caller.
+                await asyncio.wait({worker}, timeout=timeout)
+                if not worker.done():
+                    msg = f"The execution worker of kernel {kernel_id} did not stop in time."
+                    raise TimeoutError(msg)
         finally:
             try:
                 queue = self.__tasks.pop(kernel_id, None)
                 if queue is not None:
                     await asyncio.wait_for(queue.join(), timeout=timeout)
             finally:
-                client = self.__kernel_clients.pop(kernel_id, None)
-                if client is not None:
-                    client.stop_channels()
-                    # Destroy the ZMQ context to release internal signaling
-                    # FDs. Without this, each cancel leaks 2 FDs (the
-                    # eventfd/pipe pair used by the context's internal
-                    # signaling mechanism) until GC collects the client.
-                    if getattr(client, "_created_context", False) and client.context:
-                        client.context.destroy(linger=0)
+                self._drop_client(kernel_id)
                 self.__remote_servers.pop(kernel_id, None)
 
     async def interrupt(self, kernel_id: str, request_id: str | None = None) -> None:
@@ -269,6 +310,92 @@ class ExecutionStack:
         result = self.__manager.interrupt_kernel(kernel_id)
         if inspect.isawaitable(result):
             await result
+
+    async def cancel_request(self, kernel_id: str, request_id: str) -> None:
+        """Cancel the execution request ``request_id`` of ``kernel_id``.
+
+        Whatever the request was doing, it has a terminal result once this
+        returns, so a caller polling it is never left waiting:
+
+        * A queued request is taken out of the queue and failed. The request
+          running ahead of it is left alone.
+        * A running request is interrupted. If it has not ended
+          ``cancel_grace_period`` seconds later — a kernel whose reply was lost
+          is idle, and an idle kernel does not answer an interrupt — it is
+          abandoned: the kernel's worker and client are torn down, failing the
+          requests queued behind it as any failed request does, and the next
+          request starts over with a new client.
+
+        Args:
+            kernel_id: Kernel identifier
+            request_id: Request identifier
+
+        Raises:
+            ValueError: if ``request_id`` is unknown for ``kernel_id``.
+            NotImplementedError: for a kernel hosted by a remote Jupyter server
+                whose client cannot be interrupted from here.
+        """
+        results = self.__execution_results.get(kernel_id, {})
+        if request_id not in results:
+            raise ValueError(
+                f"Execution request {request_id} for kernel {kernel_id} does not exists."
+            )
+
+        if results[request_id] is NO_RESULT and self._dequeue(kernel_id, request_id):
+            get_logger().info("Cancelled queued execution request %s.", request_id)
+            results[request_id] = {"error": "Execution cancelled before it started."}
+            return
+
+        await self.interrupt(kernel_id, request_id)
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.__cancel_grace_period
+        while self._is_pending(kernel_id, request_id) and loop.time() < deadline:
+            await asyncio.sleep(0.05)
+        if not self._is_pending(kernel_id, request_id):
+            return
+
+        get_logger().warning(
+            "Execution request %s did not end %gs after its interrupt; abandoning it.",
+            request_id,
+            self.__cancel_grace_period,
+        )
+        await self.cancel(kernel_id, timeout=ABANDON_TIMEOUT)
+        # Unless the caller already collected the worker's own record of it.
+        if request_id in results:
+            results[request_id] = {
+                "error": (
+                    "Execution cancelled; the kernel did not end it within "
+                    f"{self.__cancel_grace_period:g}s of the interrupt."
+                )
+            }
+
+    def _dequeue(self, kernel_id: str, request_id: str) -> bool:
+        """Take ``request_id`` out of the queue of ``kernel_id``.
+
+        Synchronous on purpose: with no ``await`` between draining the queue
+        and refilling it, the worker cannot take a request in between.
+
+        Returns:
+            Whether the request was queued.
+        """
+        queue = self.__tasks.get(kernel_id)
+        if queue is None:
+            return False
+        items = []
+        while not queue.empty():
+            items.append(queue.get_nowait())
+            # Balance the original put; the kept items are put back below.
+            queue.task_done()
+        for item in items:
+            if item[0] != request_id:
+                queue.put_nowait(item)
+        return queue.qsize() < len(items)
+
+    def _is_pending(self, kernel_id: str, request_id: str) -> bool:
+        """Whether ``request_id`` is still queued or running."""
+        result = self.__execution_results.get(kernel_id, {}).get(request_id)
+        return result is NO_RESULT or (isinstance(result, dict) and result.get("pending") is True)
 
     async def send_input(self, kernel_id: str, value: str) -> None:
         """Send input ``value`` to the kernel ``kernel_id``.
@@ -436,6 +563,9 @@ class ExecutionStack:
 
         self.__tasks[kernel_id].put_nowait((uid, snippet, metadata))
 
-        if kernel_id not in self.__workers:
+        # A worker that has stopped — it could not connect, or the kernel
+        # failed under it — would otherwise leave this request queued forever.
+        worker = self.__workers.get(kernel_id)
+        if worker is None or worker.done():
             self.__workers[kernel_id] = asyncio.create_task(self._run_worker(kernel_id))
         return uid

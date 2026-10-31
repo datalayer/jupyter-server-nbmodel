@@ -200,6 +200,11 @@ class RequestHandler(ExtensionHandlerMixin, APIHandler):
         the runtime, so a later GET of the same request ends with an error
         instead of staying pending.
 
+        A request still queued is taken out of the queue instead, without
+        interrupting the cell running ahead of it. A running request the
+        interrupt has not ended within ``cancel_grace_period`` seconds is
+        abandoned. Either way the request has ended when this answers 204.
+
         Args:
             kernel_id: Kernel identifier
             request_id: Request identifier
@@ -209,7 +214,7 @@ class RequestHandler(ExtensionHandlerMixin, APIHandler):
             501 if ``kernel_id`` is a remote kernel that cannot be interrupted
         """
         try:
-            await self._stack.interrupt(kernel_id, request_id)
+            await self._stack.cancel_request(kernel_id, request_id)
         except ValueError as err:
             raise tornado.web.HTTPError(HTTPStatus.NOT_FOUND, reason=str(err)) from err
         except NotImplementedError as err:

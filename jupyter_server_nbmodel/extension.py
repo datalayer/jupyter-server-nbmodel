@@ -8,6 +8,7 @@ import asyncio
 
 from jupyter_server.extension.application import ExtensionApp
 from jupyter_server.services.kernels.handlers import _kernel_id_regex
+from traitlets import Float
 
 from jupyter_server_nbmodel.execution_stack import ExecutionStack
 from jupyter_server_nbmodel.handlers import (
@@ -29,6 +30,26 @@ class Extension(ExtensionApp):
 
     name = "jupyter_server_nbmodel"
 
+    execute_reply_timeout = Float(
+        60,
+        config=True,
+        help=(
+            "Seconds to wait for a cell's execute reply once the kernel has gone idle. "
+            "The kernel sends the reply before going idle, so a reply still missing is "
+            "lost: the request fails and the kernel's queue carries on with a new client. "
+            "The clock starts at idle, so long-running cells are unaffected. 0 waits forever."
+        ),
+    )
+
+    cancel_grace_period = Float(
+        5,
+        config=True,
+        help=(
+            "Seconds a cancelled running cell has to end after its kernel is interrupted. "
+            "A cell still running then is abandoned: it fails along with the cells queued "
+            "behind it, and the next cell starts over with a new kernel client."
+        ),
+    )
 
     def initialize_handlers(self):
         rtc_extension = None
@@ -43,6 +64,8 @@ class Extension(ExtensionApp):
         self.__execution_stack = ExecutionStack(
             manager=self.settings["kernel_manager"],
             ydoc_extension=rtc_extension,
+            execute_reply_timeout=self.execute_reply_timeout,
+            cancel_grace_period=self.cancel_grace_period,
         )
         self.handlers.extend(
             [
