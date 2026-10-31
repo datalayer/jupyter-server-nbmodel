@@ -7,9 +7,14 @@ on:
   pull_request:
     branches:
       - '*'
+  # Called by the Release workflow: a tag publishes nothing until these pass,
+  # and what it publishes is what the package job built.
+  workflow_call:
 
+# The group is spelt out: in a called workflow github.workflow is the caller's
+# name, and the group would be the Release workflow's own, which is a deadlock.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -67,6 +72,93 @@ jobs:
       with:
         name: extension-artifacts
         path: dist/jupyter_server_nbmodel*
+        if-no-files-found: error
+
+  # Builds the packages a release publishes, the way a release builds them,
+  # from a clean tree: on a pull request this is the check that a release
+  # would build, on a tag it is the build (release.yaml).
+  package:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+
+    - name: Base Setup
+      uses: jupyterlab/maintainer-tools/.github/actions/base-setup@v1
+
+    - name: Install the tools
+      run: python -m pip install -U "jupyterlab>=4.0.0,<5" build check-wheel-contents twine
+
+    # Under dist/, which .gitignore covers: the sdist takes any other new folder.
+    - name: Pack the npm package
+      run: |
+        set -eux
+        jlpm
+        jlpm build:prod
+        mkdir -p dist/npm
+        npm pack --pack-destination dist/npm
+
+    # clean:all removes lib/, the labextension and _version.py, so the wheel
+    # holds what hatch-jupyter-builder builds and nothing left over from npm.
+    - name: Build the Python package
+      run: |
+        set -eux
+        jlpm clean:all
+        python -m build --outdir dist/python
+
+    - name: Check the packages
+      run: |
+        set -euo pipefail
+        version="$(node -p "require('./package.json').version")"
+        tarball="dist/npm/datalayer-jupyter-server-nbmodel-${version}.tgz"
+        wheel="dist/python/jupyter_server_nbmodel-${version}-py3-none-any.whl"
+        sdist="dist/python/jupyter_server_nbmodel-${version}.tar.gz"
+        test -f "$tarball"
+        test -f "$wheel"
+        test -f "$sdist"
+
+        # node_modules and .yarn stay out only through .gitignore; PyPI holds
+        # a file to 100 MB, and this one is well under 1 MB.
+        test "$(stat -c %s "$sdist")" -lt 10000000
+
+        twine check --strict dist/python/*
+        check-wheel-contents "$wheel"
+
+        # Listed to files first: `grep -q` closing a pipe early would fail
+        # the listing under pipefail.
+        tar -tzf "$tarball" > "$RUNNER_TEMP/npm-files.txt"
+        python -m zipfile -l "$wheel" > "$RUNNER_TEMP/wheel-files.txt"
+        tar -tzf "$sdist" > "$RUNNER_TEMP/sdist-files.txt"
+
+        grep -q '^package/lib/index\.js$' "$RUNNER_TEMP/npm-files.txt"
+        grep -q '^package/style/index\.js$' "$RUNNER_TEMP/npm-files.txt"
+
+        labextension="jupyter_server_nbmodel-${version}.data/data/share/jupyter/labextensions/@datalayer/jupyter-server-nbmodel"
+        for file in package.json install.json static/style.js; do
+          grep -qF "$labextension/$file" "$RUNNER_TEMP/wheel-files.txt"
+        done
+        grep -qF "etc/jupyter/jupyter_server_config.d/jupyter_server_nbmodel.json" "$RUNNER_TEMP/wheel-files.txt"
+        grep -qF "jupyter_server_nbmodel/labextension/static/style.js" "$RUNNER_TEMP/sdist-files.txt"
+
+        # The labextension and the Python package carry the version too.
+        labextension_version="$(unzip -p "$wheel" "$labextension/package.json" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")"
+        echo "npm=$version labextension=$labextension_version"
+        test "$version" = "$labextension_version"
+        unzip -p "$wheel" jupyter_server_nbmodel/_version.py | grep -qF "'$version'"
+
+    - name: Upload the npm package
+      uses: actions/upload-artifact@v7
+      with:
+        name: npm-package
+        path: dist/npm/*.tgz
+        if-no-files-found: error
+
+    - name: Upload the Python packages
+      uses: actions/upload-artifact@v7
+      with:
+        name: python-packages
+        path: dist/python/*
         if-no-files-found: error
 
   test_isolated:
@@ -159,6 +251,8 @@ jobs:
 
   check_links:
     name: Check Links
+    # A link that dies out there is no reason to hold a release back.
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

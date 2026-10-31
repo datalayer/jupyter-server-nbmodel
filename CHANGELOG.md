@@ -1,6 +1,37 @@
 # Changelog
 
-<!-- <START NEW CHANGELOG ENTRY> -->
+## 0.2.10
+
+([Full Changelog](https://github.com/datalayer/jupyter-server-nbmodel/compare/v0.2.8...9a621cb286ce05e8e15bbfacb43359289a968c83))
+
+0.2.9 went to PyPI only, with no tag, so this entry covers it too.
+
+### Enhancements made
+
+- Add a cancel route so a cancelled wait stops the run ([5284c00](https://github.com/datalayer/jupyter-server-nbmodel/commit/5284c00)) ([@echarles](https://github.com/echarles))
+
+### Bugs fixed
+
+- Keep a lost execute reply from wedging a kernel's request queue [#96](https://github.com/datalayer/jupyter-server-nbmodel/pull/96) ([@lawrencelee-insitro](https://github.com/lawrencelee-insitro))
+
+### Maintenance and upkeep improvements
+
+- Depend on the released Datalayer packages [#95](https://github.com/datalayer/jupyter-server-nbmodel/pull/95) ([@echarles](https://github.com/echarles))
+- Change comparison operator for PR update check [#93](https://github.com/datalayer/jupyter-server-nbmodel/pull/93) ([@JarLob](https://github.com/JarLob))
+- Release on a `v*` tag, with no token, and rename the workflows to `.yaml`
+
+### Documentation improvements
+
+- fix: broken link on readme [#94](https://github.com/datalayer/jupyter-server-nbmodel/pull/94) ([@echarles](https://github.com/echarles))
+
+### Contributors to this release
+
+The following people contributed discussions, new ideas, code and documentation contributions, and review.
+See [our definition of contributors](https://github-activity.readthedocs.io/en/latest/use/#how-does-this-tool-define-contributions-in-the-reports).
+
+([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2026-08-20&to=2026-10-31&type=c))
+
+@echarles ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aecharles+updated%3A2026-08-20..2026-10-31&type=Issues)) | @JarLob ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3AJarLob+updated%3A2026-08-20..2026-10-31&type=Issues)) | @lawrencelee-insitro ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Alawrencelee-insitro+updated%3A2026-08-20..2026-10-31&type=Issues))
 
 ## 0.2.8
 
@@ -18,8 +49,6 @@ See [our definition of contributors](https://github-activity.readthedocs.io/en/l
 ([GitHub contributors page for this release](https://github.com/datalayer/jupyter-server-nbmodel/graphs/contributors?from=2026-08-18&to=2026-08-20&type=c))
 
 @echarles ([activity](https://github.com/search?q=repo%3Adatalayer%2Fjupyter-server-nbmodel+involves%3Aecharles+updated%3A2026-08-18..2026-08-20&type=Issues))
-
-<!-- <END NEW CHANGELOG ENTRY> -->
 
 ## 0.2.7
 

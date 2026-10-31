@@ -1,24 +1,47 @@
 # Making a new release of jupyter_server_nbmodel
 
-The extension can be published to `PyPI` and `npm` manually or using the [Jupyter Releaser](https://github.com/jupyter-server/jupyter_releaser).
+## Automated release (tags)
+
+A pushed tag `vX.Y.Z` publishes `jupyter_server_nbmodel` to PyPI and `@datalayer/jupyter-server-nbmodel` to npm, and creates the GitHub release, through [`.github/workflows/release.yaml`](.github/workflows/release.yaml). No token is stored: both registries trust that workflow (trusted publishing, OIDC).
+
+1. Bump the version to `X.Y.Z` in `package.json`, the single source: `hatch-nodejs-version` gives it to the Python package and writes `jupyter_server_nbmodel/_version.py` at build time. That file is generated and not committed.
+2. Add the release's entry to `CHANGELOG.md`, open a pull request with both, and merge it.
+3. Tag the merge commit on `main` and push the tag. The tag must carry the `v`: `release.yaml` triggers on `v*` only, and a bare tag publishes nothing.
+
+   ```bash
+   git switch main && git pull
+   git tag vX.Y.Z && git push origin vX.Y.Z
+   ```
+
+4. Check the published packages: `npm view @datalayer/jupyter-server-nbmodel@X.Y.Z version` and `pip index versions jupyter-server-nbmodel`.
+
+What the workflow does:
+
+- **check_version**: refuses a tag that differs from the version in `package.json`, before anything runs.
+- **build**: calls [`.github/workflows/build.yaml`](.github/workflows/build.yaml) on the tagged commit, so the lint, the tests and the integration tests must pass. Only the link check is left out: a dead link is no reason to hold a release back. Its `package` job, which also runs on every pull request and on `main`, builds what is published: it installs JupyterLab for `jlpm`; runs `jlpm` and `jlpm build:prod` and packs the npm tarball with `npm pack`; runs `jlpm clean:all`, then `python -m build`, which builds the sdist and, from it, the wheel; runs `twine check` and `check-wheel-contents`; and checks that the wheel holds the labextension and the server configuration, that the sdist holds the labextension, and that they carry the version.
+- **pypi**: publishes the sdist and the wheel with `pypa/gh-action-pypi-publish`, in the `pypi` environment, with `id-token: write`.
+- **npm**: in the `npm` environment, with `id-token: write`, installs npm 11.5.1 or later, which trusted publishing needs, then runs `npm publish <tarball> --access public --provenance`.
+- **github_release**: once both registries have the release, creates the GitHub release from the tag, with generated notes and the packages attached.
+
+The pypi and npm jobs run independently: if one fails, the other still publishes. Re-running the failed job publishes the same packages.
+
+One-time setup, done once per registry:
+
+- **PyPI**: on `https://pypi.org/manage/project/jupyter-server-nbmodel/settings/publishing/`, a GitHub trusted publisher with owner `datalayer`, repository `jupyter-server-nbmodel`, workflow `release.yaml` and environment `pypi`.
+- **npm**: in the settings of `@datalayer/jupyter-server-nbmodel` on npmjs.com, under _Trusted Publisher_, GitHub Actions with organization `datalayer`, repository `jupyter-server-nbmodel`, workflow `release.yaml` and environment `npm`.
+
+Renaming the workflow file or an environment breaks the release: the registries refuse the OIDC token until they are pointed at the new name.
 
 ## Manual release
 
+The steps below still work, for example for a release cut from a machine.
+
 ### Python package
 
-This extension can be distributed as Python packages. All of the Python
-packaging instructions are in the `pyproject.toml` file to wrap your extension in a
-Python package. Before generating a package, you first need to install some tools:
+All of the Python packaging instructions are in the `pyproject.toml` file. Before generating a package, you first need to install some tools:
 
 ```bash
-pip install build twine hatch
-```
-
-Bump the version using `hatch`. By default this will create a tag.
-See the docs on [hatch-nodejs-version](https://github.com/agoose77/hatch-nodejs-version#semver) for details.
-
-```bash
-hatch version <new-version>
+pip install build twine
 ```
 
 Make sure to clean up all the development files before building the package:
@@ -52,26 +75,11 @@ twine upload dist/*
 To publish the frontend part of the extension as a NPM package, do:
 
 ```bash
+jlpm
+jlpm build:prod
 npm login
 npm publish --access public
 ```
-
-## Automated releases with the Jupyter Releaser
-
-The extension repository should already be compatible with the Jupyter Releaser. But
-the GitHub repository and the package managers need to be properly set up. Please
-follow the instructions of the Jupyter Releaser [checklist](https://jupyter-releaser.readthedocs.io/en/latest/how_to_guides/convert_repo_from_repo.html).
-
-Here is a summary of the steps to cut a new release:
-
-- Go to the Actions panel
-- Run the "Step 1: Prep Release" workflow
-- Check the draft changelog
-- Run the "Step 2: Publish Release" workflow
-
-> \[!NOTE\]
-> Check out the [workflow documentation](https://jupyter-releaser.readthedocs.io/en/latest/get_started/making_release_from_repo.html)
-> for more information.
 
 ## Publishing to `conda-forge`
 

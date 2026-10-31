@@ -1,7 +1,7 @@
 <a href="https://datalayer.ai"><img alt="Datalayer" src="https://assets.datalayer.tech/datalayer-25.svg" height="22"/></a>
 
 [![Become a Sponsor](https://img.shields.io/static/v1?label=Become%20a%20Sponsor&message=%E2%9D%A4&logo=GitHub&style=flat&color=1ABC9C)](https://github.com/sponsors/datalayer)
-[![Github Actions Status](https://github.com/datalayer/jupyter-server-nbmodel/workflows/Build/badge.svg)](https://github.com/datalayer/jupyter-server-nbmodel/actions/workflows/build.yml)
+[![Github Actions Status](https://github.com/datalayer/jupyter-server-nbmodel/workflows/Build/badge.svg)](https://github.com/datalayer/jupyter-server-nbmodel/actions/workflows/build.yaml)
 
 [![PyPI - Version](https://img.shields.io/pypi/v/jupyter-server-nbmodel?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/jupyter-server-nbmodel) [![Total PyPI downloads](https://img.shields.io/pepy/dt/jupyter-server-nbmodel?style=for-the-badge&logo=python&logoColor=white)](https://pepy.tech/project/jupyter-server-nbmodel) [![License](https://img.shields.io/badge/License-BSD_3--Clause-blue?style=for-the-badge&logo=open-source-initiative&logoColor=white)](https://opensource.org/licenses/BSD-3-Clause)
 

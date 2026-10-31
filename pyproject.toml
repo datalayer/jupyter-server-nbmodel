@@ -176,16 +176,5 @@ ignore = [
 # F821 Undefined name `c`
 "ui-tests/jupyter_server_test_config.py" = ["F821"]
 
-[tool.jupyter-releaser.options]
-version_cmd = "hatch version"
-
-[tool.jupyter-releaser.hooks]
-before-build-npm = [
-    "python -m pip install 'jupyterlab>=4.0.0,<5'",
-    "jlpm",
-    "jlpm build:prod"
-]
-before-build-python = ["jlpm clean:all"]
-
 [tool.check-wheel-contents]
 ignore = ["W002"]

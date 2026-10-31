@@ -1,0 +1,102 @@
+# Publishes the release a tag names, to PyPI and npm, with no stored token:
+# both registries trust this workflow file (OIDC trusted publishing), so its
+# name and each job's environment are part of what they check. The tests
+# and the packages come from build.yaml, called here on the tagged commit:
+# a tag whose tests fail publishes nothing. See RELEASE.md.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # The Python version is not in the tree: hatch-nodejs-version reads it from
+  # package.json, and build.yaml's package job checks that the wheel agrees.
+  check_version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check the tag names the version being released
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          echo "tag=$tag package.json=$version"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+
+  build:
+    needs: check_version
+    uses: ./.github/workflows/build.yaml
+
+  pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: python-packages
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Covers a re-run after a partial upload.
+          skip-existing: true
+
+  npm:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@^11.5.1 && npm --version
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-package
+          path: dist
+      - name: Publish
+        run: |
+          set -euo pipefail
+          for tarball in dist/*.tgz; do
+            # "./": npm reads a bare "dist/x.tgz" as the GitHub shorthand
+            # github:dist/x.tgz and refuses to fetch it (EALLOWGIT).
+            npm publish "./$tarball" --access public --provenance
+          done
+
+  github_release:
+    needs: [pypi, npm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-package
+          path: dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: python-packages
+          path: dist
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes
