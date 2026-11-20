@@ -5,8 +5,6 @@
 
 import React from 'react';
 
-import '@primer/react-brand/lib/css/main.css';
-
 type Props = {
   icon1: JSX.Element;
   icon2: JSX.Element;
