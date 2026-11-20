@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { Box } from '@datalayer/primer-addons';
 
 type Props = {
   icon1: JSX.Element;
@@ -14,11 +15,11 @@ type Props = {
 export const IconsTitle = (props: Props) => {
   const { icon1, icon2, title } = props;
   return (
-    <div style={{ display: 'flex' }}>
-      <div>{icon1}</div>
-      <div>{icon2}</div>
-      <div>{title}</div>
-    </div>
+    <Box display="flex">
+      <Box>{icon1}</Box>
+      <Box>{icon2}</Box>
+      <Box>{title}</Box>
+    </Box>
   );
 };
 

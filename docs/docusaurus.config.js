@@ -15,6 +15,7 @@ module.exports = {
   organizationName: 'datalayer',
   projectName: 'datalayer',
   markdown: {
+    format: 'detect',
     mermaid: true,
   },
   plugins: [
